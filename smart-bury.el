@@ -2,6 +2,9 @@
 
 ;; Author: Pedro Ribeiro Mendes Júnior <pedrormjunior@gmail.com>
 ;; Keywords: convenience
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "27.1"))
+;; URL: https://github.com/pedrormjunior/smart-bury
 
 ;;; Commentary:
 
@@ -10,6 +13,9 @@
 ;; extraction.
 
 ;;; Code:
+
+(require 'cl-lib)
+(require 'seq)
 
 (defconst smart-bury-commands
   '(smart-bury-switch-through-buffers
