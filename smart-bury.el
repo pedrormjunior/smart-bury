@@ -31,22 +31,28 @@
 (defvar smart-bury-initial-buffer nil
   "Store the current buffer when the first Smart Buffer was called.")
 
-(defcustom smart-bury-same-frame t
-  "Whether to consider only recent buffers in the same frame.")
+(defgroup smart-bury nil
+  "Smartly bury, quit, and kill buffers."
+  :group 'convenience)
 
-(defun smart-bury--starts-now? nil
+(defcustom smart-bury-same-frame t
+  "Whether to consider only recent buffers in the same frame."
+  :type 'boolean
+  :group 'smart-bury)
+
+(defun smart-bury--starts-now-p nil
   "Check if `last-command' was *not* one of the Smart Bury ones.
 The Smart Bury commands are stored in `smart-bury-commands'.  When
 `last-command' was not a Smart Bury one, set `smart-bury-initial-buffer'
 to the buffer from which the first call to a Smart Buffer command
 occurred."
-  (let ((smart-bury-command? (seq-contains-p
+  (let ((smart-bury-command-p (seq-contains-p
                               smart-bury-commands last-command 'eq)))
-    (unless smart-bury-command?
+    (unless smart-bury-command-p
       (setq smart-bury-initial-buffer (current-buffer)))
-    (not smart-bury-command?)))
+    (not smart-bury-command-p)))
 
-(defun smart-bury--is-initial? nil
+(defun smart-bury--is-initial-p nil
   "Check if current buffer is the initial one."
   (eq (current-buffer) smart-bury-initial-buffer))
 
@@ -80,8 +86,8 @@ selection."
 (defun smart-bury--run-function (func &rest r)
   "Run FUNC passing arguments in R to it.
 Also, take, into account the buffer configuration."
-  (let ((starts-now (smart-bury--starts-now?))
-        (was-initial (smart-bury--is-initial?)))
+  (let ((starts-now (smart-bury--starts-now-p))
+        (was-initial (smart-bury--is-initial-p)))
     (apply func r)
     (when was-initial
       (setq smart-bury-counter 1))
@@ -99,8 +105,8 @@ Also, take, into account the buffer configuration."
 (defun smart-bury-switch-through-buffers nil
   "Smartly/Cumulatively switch to other buffers."
   (interactive)
-  (when (or (smart-bury--starts-now?)
-            (smart-bury--is-initial?))
+  (when (or (smart-bury--starts-now-p)
+            (smart-bury--is-initial-p))
     (setq smart-bury-counter 1))
   (switch-to-buffer
    (smart-bury--go-through-buffers (cdr (buffer-list
@@ -112,8 +118,8 @@ Also, take, into account the buffer configuration."
   "Smartly switch to other buffer."
   (interactive)
   (setq smart-bury-counter
-        (if (or (smart-bury--starts-now?)
-                (smart-bury--is-initial?))
+        (if (or (smart-bury--starts-now-p)
+                (smart-bury--is-initial-p))
             2
           (max 2 smart-bury-counter)))
   (smart-bury--go-through-buffers (cdr (buffer-list
