@@ -125,6 +125,8 @@ Also, take, into account the buffer configuration."
    (smart-bury--go-through-buffers (cdr (buffer-list
                                          (when smart-bury-same-frame
                                            (selected-frame))))))
+  (when (called-interactively-p 'interactive)
+    (message "Smart Bury: buffer %d — %s" smart-bury-counter (buffer-name)))
   (setq smart-bury-counter (1+ smart-bury-counter)))
 
 (defun smart-bury-switch-to-other-buffer nil
@@ -138,6 +140,8 @@ Also, take, into account the buffer configuration."
   (smart-bury--go-through-buffers (cdr (buffer-list
                                         (when smart-bury-same-frame
                                           (selected-frame)))))
+  (when (called-interactively-p 'interactive)
+    (message "Smart Bury: switched to %s" (buffer-name)))
   (setq smart-bury-counter 2))
 
 (defun smart-bury-bury-buffer (&optional buffer-or-name)
@@ -147,7 +151,9 @@ the next buffer.
 
 For more documentation, see `bury-buffer'."
   (interactive "P")
-  (smart-bury--run-function 'bury-buffer buffer-or-name))
+  (smart-bury--run-function 'bury-buffer buffer-or-name)
+  (when (called-interactively-p 'interactive)
+    (message "Smart Bury: buried, now at %s" (buffer-name))))
 
 (defun smart-bury-quit-window (&optional kill window)
   "Smartly quit window and bury its buffer.
@@ -156,7 +162,9 @@ the next buffer.
 
 For more documentation, see `quit-window'."
   (interactive "P")
-  (smart-bury--run-function 'quit-window kill window))
+  (smart-bury--run-function 'quit-window kill window)
+  (when (called-interactively-p 'interactive)
+    (message "Smart Bury: quit window, now at %s" (buffer-name))))
 
 (defun smart-bury-kill-current-buffer nil
   "Smartly kill the current buffer.
@@ -165,7 +173,9 @@ Call `kill-current-buffer' and switch smartly to the next buffer.
 For more documentation, see `kill-current-buffer'."
   ;; There seems to be a problem with this function.
   (interactive)
-  (smart-bury--run-function 'kill-current-buffer))
+  (smart-bury--run-function 'kill-current-buffer)
+  (when (called-interactively-p 'interactive)
+    (message "Smart Bury: killed buffer, now at %s" (buffer-name))))
 
 (provide 'smart-bury)
 
