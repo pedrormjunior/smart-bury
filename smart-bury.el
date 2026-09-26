@@ -60,28 +60,41 @@ occurred."
   "Go to through `smart-bury-counter' previous BUFFERS.
 Switch to them except the last one, which is returned, instead.  When
 ALLOW-CURRENT, the current buffer is accept as valid buffer for
-selection."
+selection.
+
+When `smart-bury-counter' exceeds the number of eligible buffers,
+wrap around and cycle through them again, switching through every
+eligible buffer once per lap.  Signal a `user-error' when there are
+no eligible buffers to cycle through at all, instead of looping
+forever chasing a target that can never be reached."
   (cl-assert (>= smart-bury-counter 1))
-  (let ((counter 0)
-        buffer-selection)
-    ;; Cycle through all buffers again if necessary
-    (while (< counter smart-bury-counter)
-      (catch 'finish
-        (seq-doseq (buffer buffers)
-          (when (and (not (minibufferp buffer))
-                     (or (not (get-buffer-window buffer))
-                         (and allow-current
-                              (eq buffer (current-buffer))))
-                     (not (string-match-p "^ \\*"
-                                          (buffer-name buffer))))
+  (let ((eligible (seq-filter
+                   (lambda (buffer)
+                     (and (not (minibufferp buffer))
+                          (or (not (get-buffer-window buffer))
+                              (and allow-current
+                                   (eq buffer (current-buffer))))
+                          (not (string-match-p "^ \\*"
+                                               (buffer-name buffer)))))
+                   buffers)))
+    (when (null eligible)
+      (user-error "Smart Bury: no eligible buffer to switch to"))
+    (let ((counter 0)
+          buffer-selection)
+      ;; Cycle through all eligible buffers again if necessary.  Since
+      ;; ELIGIBLE is non-empty, every lap makes progress, so this
+      ;; always terminates within `smart-bury-counter' laps.
+      (while (< counter smart-bury-counter)
+        (catch 'finish
+          (seq-doseq (buffer eligible)
             (push buffer buffer-selection)
             (setq counter (1+ counter))
             (when (eq counter smart-bury-counter)
-              (throw 'finish nil))))))
-    (cl-assert (= counter (length buffer-selection) smart-bury-counter))
-    (seq-doseq (buffer (cdr buffer-selection))
-      (switch-to-buffer buffer))
-    (car buffer-selection)))
+              (throw 'finish nil)))))
+      (cl-assert (= counter (length buffer-selection) smart-bury-counter))
+      (seq-doseq (buffer (cdr buffer-selection))
+        (switch-to-buffer buffer))
+      (car buffer-selection))))
 
 (defun smart-bury--run-function (func &rest r)
   "Run FUNC passing arguments in R to it.

@@ -67,6 +67,30 @@ already has a window; without it, a displayed buffer is skipped."
     (should (eq (smart-bury--go-through-buffers (list cur other) 'allow-current)
                cur))))
 
+(ert-deftest smart-bury-test-go-through-buffers-wraps-around ()
+  "When COUNTER exceeds the number of eligible buffers, cycle back
+around instead of failing to make progress."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
+    (setq smart-bury-counter 3)
+    (should (eq (smart-bury--go-through-buffers (list a b) 'allow-current) a))))
+
+(ert-deftest smart-bury-test-go-through-buffers-no-eligible-signals-error ()
+  "With zero eligible buffers (e.g. every candidate is already
+displayed in a window and ALLOW-CURRENT is nil), signal a
+`user-error' immediately instead of looping forever.  This is a
+regression test for IMPROVEMENTS.md item 2: an unbounded `while' loop
+used to spin forever chasing a target buffer count it could never
+reach."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
+    (switch-to-buffer a)
+    (save-window-excursion
+      (split-window)
+      (other-window 1)
+      (switch-to-buffer b)
+      (other-window 1)
+      (should-error (smart-bury--go-through-buffers (list a b) nil)
+                    :type 'user-error))))
+
 
 ;;; `smart-bury--starts-now-p' / `smart-bury--is-initial-p'
 
@@ -148,6 +172,32 @@ lands each time."
       (let ((last-command 'smart-bury-switch-through-buffers))
         (smart-bury-switch-through-buffers))
       (should (= smart-bury-counter 3)))))
+
+(ert-deftest smart-bury-test-switch-through-then-switch-to-other-returns-to-origin ()
+  "Repetitive calls to `smart-bury-switch-through-buffers' followed
+by a single call to `smart-bury-switch-to-other-buffer' must bring
+back the original buffer.
+
+Unlike the other public-command tests above, this one does NOT stub
+`buffer-list': the invariant it checks depends on the real, dynamic
+most-recently-used buffer ordering that `switch-to-buffer' maintains
+as a side effect of the intermediate switches `smart-bury' performs
+while cycling -- exactly the behavior a prior, more \"clever\"
+rewrite of `smart-bury--go-through-buffers' silently dropped (it
+computed the right final buffer but skipped the intermediate
+switches, so this invariant broke even though every other test
+still passed)."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
+    (switch-to-buffer a)
+    (let ((last-command 'some-other-command))
+      (smart-bury-switch-through-buffers))
+    (dotimes (_ 2)
+      (let ((last-command 'smart-bury-switch-through-buffers))
+        (smart-bury-switch-through-buffers)))
+    (should-not (eq (current-buffer) a))
+    (let ((last-command 'smart-bury-switch-through-buffers))
+      (smart-bury-switch-to-other-buffer))
+    (should (eq (current-buffer) a))))
 
 (ert-deftest smart-bury-test-switch-to-other-buffer-targets-second ()
   "Regardless of any counter left over from a previous sequence,
