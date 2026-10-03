@@ -19,15 +19,7 @@
    reports dead buffers), but the function has no defense if it's
    ever called with a caller-supplied list containing one — as
    happened while testing.
-3. **Docs**: there's no `README.md` and the `Commentary:` section is
-   just an extraction note. A real README should explain *why*
-   this package exists (repeated bury/quit/kill commands normally
-   dump you on an arbitrary buffer; Smart Bury instead cycles you
-   through recently-used ones) and show the intended keybinding
-   setup (remapping `bury-buffer`, `quit-window`,
-   `kill-current-buffer`), since none of that is obvious from the
-   function names alone.
-4. **License header**: the file currently has no license notice at
+3. **License header**: the file currently has no license notice at
    all, which is a blocker for any public distribution (MELPA
    requires one). GPL-3.0-or-later is the conventional choice for
    packages that extend core Emacs behavior; needs the standard
