@@ -40,6 +40,21 @@ afterward even if BODY signals an error."
          ,@body)
      (smart-bury-mode -1)))
 
+(defmacro smart-bury-test-with-wrapped-commands (commands &rest body)
+  "Run BODY with `smart-bury-wrapped-commands' temporarily set to
+COMMANDS (regenerating the wrapper commands, `smart-bury-commands',
+and `smart-bury-mode-map' to match), always restoring and
+regenerating the original value afterward even if BODY signals an
+error."
+  (declare (indent 1))
+  `(let ((smart-bury--orig-wrapped-commands smart-bury-wrapped-commands))
+     (unwind-protect
+         (progn
+           (customize-set-variable 'smart-bury-wrapped-commands ,commands)
+           ,@body)
+       (customize-set-variable 'smart-bury-wrapped-commands
+                               smart-bury--orig-wrapped-commands))))
+
 (defmacro smart-bury-test-with-buffer-list (buffers &rest body)
   "Run BODY with `buffer-list' stubbed to always return the live
 buffers among BUFFERS. This isolates tests of the public commands
@@ -276,6 +291,55 @@ is actually live in the active keymaps, not just present in
   (smart-bury-test-with-mode
     (should (eq (command-remapping 'bury-buffer) #'smart-bury-bury-buffer)))
   (should-not (command-remapping 'bury-buffer)))
+
+;;; `smart-bury-wrapped-commands'
+
+(ert-deftest smart-bury-test-wrapped-commands-default-defines-expected-wrappers ()
+  "The default value generates `smart-bury-quit-window' and
+`smart-bury-kill-current-buffer', and both are tracked in
+`smart-bury-commands'."
+  (should (fboundp 'smart-bury-quit-window))
+  (should (fboundp 'smart-bury-kill-current-buffer))
+  (should (memq 'smart-bury-quit-window smart-bury-commands))
+  (should (memq 'smart-bury-kill-current-buffer smart-bury-commands)))
+
+(ert-deftest smart-bury-test-wrapped-commands-reuses-interactive-form ()
+  "A generated wrapper's `interactive' spec matches the wrapped
+command's own, so it accepts the same arguments (e.g. `quit-window's
+prefix-arg-driven KILL/WINDOW)."
+  (should (equal (interactive-form 'smart-bury-quit-window)
+                 (interactive-form 'quit-window)))
+  (should (equal (interactive-form 'smart-bury-kill-current-buffer)
+                 (interactive-form 'kill-current-buffer))))
+
+(ert-deftest smart-bury-test-wrapped-commands-excludes-removed-entry ()
+  "Excluding `quit-window' from the list removes it from
+`smart-bury-commands' and drops its remap from `smart-bury-mode-map',
+while `kill-current-buffer' -- still in the list -- keeps its remap."
+  (smart-bury-test-with-wrapped-commands '(kill-current-buffer)
+    (should-not (memq 'smart-bury-quit-window smart-bury-commands))
+    (should-not (lookup-key smart-bury-mode-map [remap quit-window]))
+    (should (memq 'smart-bury-kill-current-buffer smart-bury-commands))
+    (should (eq (lookup-key smart-bury-mode-map [remap kill-current-buffer])
+               #'smart-bury-kill-current-buffer))))
+
+(ert-deftest smart-bury-test-wrapped-commands-includes-new-entry ()
+  "Adding an arbitrary interactive command to the list defines its
+wrapper and tracks it in `smart-bury-commands'."
+  (smart-bury-test-with-wrapped-commands '(quit-window kill-current-buffer other-window)
+    (should (fboundp 'smart-bury-other-window))
+    (should (memq 'smart-bury-other-window smart-bury-commands))
+    (should (eq (lookup-key smart-bury-mode-map [remap other-window])
+               #'smart-bury-other-window))
+    (should (eq (get 'smart-bury-other-window 'repeat-map) 'smart-bury-repeat-map))))
+
+(ert-deftest smart-bury-test-wrapped-commands-restored-after-macro ()
+  "Sanity check that `smart-bury-test-with-wrapped-commands' actually
+restores the previous configuration afterward."
+  (let ((before smart-bury-wrapped-commands))
+    (smart-bury-test-with-wrapped-commands '(kill-current-buffer))
+    (should (equal smart-bury-wrapped-commands before))
+    (should (memq 'smart-bury-quit-window smart-bury-commands))))
 
 (provide 'smart-bury-tests)
 

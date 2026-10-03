@@ -17,13 +17,13 @@
 (require 'cl-lib)
 (require 'seq)
 
-(defconst smart-bury-commands
+(defvar smart-bury-commands
   '(smart-bury-switch-through-buffers
     smart-bury-switch-to-other-buffer
-    smart-bury-bury-buffer
-    smart-bury-quit-window
-    smart-bury-kill-current-buffer)
-  "Commands allowed by Smart Bury without resetting configuration.")
+    smart-bury-bury-buffer)
+  "Commands allowed by Smart Bury without resetting configuration.
+Extended with each wrapper generated from `smart-bury-wrapped-commands'
+whenever that variable is set.")
 
 (defvar smart-bury-counter 1
   "Hold the counter of buffer to switch to after a command.")
@@ -155,38 +155,50 @@ For more documentation, see `bury-buffer'."
   (when (called-interactively-p 'interactive)
     (message "Smart Bury: buried, now at %s" (buffer-name))))
 
-(defun smart-bury-quit-window (&optional kill window)
-  "Smartly quit window and bury its buffer.
-Call `quit-window' passing KILL and WINDOW to it and smartly switch to
-the next buffer.
+(defun smart-bury--wrapper-name (fn)
+  "Return the symbol `smart-bury-FN' for vanilla command FN."
+  (intern (format "smart-bury-%s" fn)))
 
-For more documentation, see `quit-window'."
-  (interactive "P")
-  (smart-bury--run-function 'quit-window kill window)
-  (when (called-interactively-p 'interactive)
-    (message "Smart Bury: quit window, now at %s" (buffer-name))))
+(defun smart-bury--define-wrapper (fn)
+  "Define `smart-bury-FN', an interactive command that smartly wraps
+the vanilla command FN via `smart-bury--run-function', cycling
+through recently-used buffers afterward the same way
+`smart-bury-bury-buffer' does.
 
-(defun smart-bury-kill-current-buffer nil
-  "Smartly kill the current buffer.
-Call `kill-current-buffer' and switch smartly to the next buffer.
+FN's own `interactive' spec is reused verbatim, so the wrapper
+accepts whatever arguments FN itself would (e.g. `quit-window's
+prefix-arg-driven KILL/WINDOW)."
+  (let* ((name (smart-bury--wrapper-name fn))
+         (iform (or (interactive-form fn)
+                    (error "`%s' is not an interactive command" fn))))
+    (defalias name
+      (eval
+       `(lambda (&rest args)
+          ,iform
+          (apply #'smart-bury--run-function ',fn args)
+          (when (called-interactively-p 'interactive)
+            (message "Smart Bury: ran `%s', now at %s" ',fn (buffer-name))))
+       t)
+      (format "Smartly call `%s' and switch to the next buffer.\n\nFor more documentation, see `%s'." fn fn))))
 
-For more documentation, see `kill-current-buffer'."
-  ;; There seems to be a problem with this function.
-  (interactive)
-  (smart-bury--run-function 'kill-current-buffer)
-  (when (called-interactively-p 'interactive)
-    (message "Smart Bury: killed buffer, now at %s" (buffer-name))))
-
-(defvar smart-bury-mode-map
+(defvar smart-bury--mode-map-base
   (let ((map (make-sparse-keymap)))
     (define-key map [remap bury-buffer] #'smart-bury-bury-buffer)
-    (define-key map [remap quit-window] #'smart-bury-quit-window)
-    (define-key map [remap kill-current-buffer] #'smart-bury-kill-current-buffer)
     (define-key map (kbd "C-x M--") #'bury-buffer)
     (define-key map (kbd "C-x _") #'smart-bury-switch-through-buffers)
     (define-key map (kbd "C-x M-_") #'smart-bury-switch-to-other-buffer)
     map)
-  "Keymap for `smart-bury-mode'.")
+  "Fixed entries of `smart-bury-mode-map', unaffected by
+`smart-bury-wrapped-commands'.")
+
+(defvar smart-bury-mode-map (copy-keymap smart-bury--mode-map-base)
+  "Keymap for `smart-bury-mode'.
+Rebuilt in place (same object -- see `smart-bury--set-wrapped-commands')
+from `smart-bury--mode-map-base' plus a remap entry per
+`smart-bury-wrapped-commands' entry, every time that variable is set.
+`define-minor-mode' captures this keymap by value, not by live symbol
+lookup, so it must be mutated rather than reassigned to stay in
+effect once `smart-bury-mode' is already enabled.")
 
 ;;;###autoload
 (define-minor-mode smart-bury-mode
@@ -210,26 +222,62 @@ via `define-key') before or after enabling the mode to change them."
   "Keymap letting `repeat-mode' repeat Smart Bury's commands with a
 single key once invoked.
 
-All five Smart Bury commands set `repeat-check-key' to `no' below,
-so this map arms regardless of which key actually invoked the
-command -- including `smart-bury-quit-window' and
+Every Smart Bury command, including each one generated from
+`smart-bury-wrapped-commands', sets `repeat-check-key' to `no', so
+this map arms regardless of which key actually invoked the
+command -- notably commands like `smart-bury-quit-window' and
 `smart-bury-kill-current-buffer', which only reach the user via a
 remap of whatever key `quit-window'/`kill-current-buffer' are bound
 to (e.g. \"q\" in many read-only modes), and so have no fixed \"last
-key\" of their own to require.  Neither has a default binding in
-this map; add one yourself (and bind the matching vanilla command,
-if needed) to make it repeatable with that key.
+key\" of their own to require.  None of the wrapped commands get a
+default binding in this map; add one yourself (and bind the matching
+vanilla command, if needed) to make it repeatable with that key.
 
 This has no effect unless the user has enabled `repeat-mode'
 themselves; `smart-bury-mode' does not turn it on.")
 
 (dolist (command '(smart-bury-switch-through-buffers
                    smart-bury-switch-to-other-buffer
-                   smart-bury-bury-buffer
-                   smart-bury-quit-window
-                   smart-bury-kill-current-buffer))
+                   smart-bury-bury-buffer))
   (put command 'repeat-map 'smart-bury-repeat-map)
   (put command 'repeat-check-key 'no))
+
+(defun smart-bury--set-wrapped-commands (symbol value)
+  "Regenerate the wrapper commands, `smart-bury-commands', and
+`smart-bury-mode-map' to match VALUE."
+  (set-default symbol value)
+  (setq smart-bury-commands
+        (append '(smart-bury-switch-through-buffers
+                   smart-bury-switch-to-other-buffer
+                   smart-bury-bury-buffer)
+                (mapcar #'smart-bury--wrapper-name value)))
+  ;; `define-minor-mode' captured `smart-bury-mode-map' by value, not
+  ;; by live symbol lookup, so if the mode is already enabled, only
+  ;; mutating this same keymap OBJECT (not reassigning the variable to
+  ;; a new one) keeps the change in effect.  Rebuilding fresh from
+  ;; `smart-bury--mode-map-base' each time (rather than layering onto
+  ;; whatever `smart-bury-mode-map' currently holds) ensures a command
+  ;; removed from VALUE loses its remap instead of it lingering from a
+  ;; previous call.
+  (let ((fresh (copy-keymap smart-bury--mode-map-base)))
+    (dolist (fn value)
+      (define-key fresh (vector 'remap fn) (smart-bury--wrapper-name fn)))
+    (setcdr smart-bury-mode-map (cdr fresh)))
+  (dolist (fn value)
+    (smart-bury--define-wrapper fn)
+    (put (smart-bury--wrapper-name fn) 'repeat-map 'smart-bury-repeat-map)
+    (put (smart-bury--wrapper-name fn) 'repeat-check-key 'no)))
+
+(defcustom smart-bury-wrapped-commands '(quit-window kill-current-buffer)
+  "Vanilla commands to generate a `smart-bury-FN' wrapper for.
+`smart-bury-bury-buffer' is defined separately (it has its own
+default keybinding in `smart-bury-mode-map') and is not part of this
+list.  Setting this variable (e.g. via `setopt' or Customize)
+regenerates the wrapper commands and keeps `smart-bury-commands',
+`smart-bury-mode-map', and `smart-bury-repeat-map' in sync."
+  :type '(repeat function)
+  :group 'smart-bury
+  :set #'smart-bury--set-wrapped-commands)
 
 (provide 'smart-bury)
 

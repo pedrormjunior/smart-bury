@@ -17,9 +17,10 @@ are.
 ## Commands
 
 - `smart-bury-bury-buffer` — like `bury-buffer`, but smart.
-- `smart-bury-quit-window` — like `quit-window`, but smart.
+- `smart-bury-quit-window` — like `quit-window`, but smart. Generated
+  from `smart-bury-wrapped-commands` (see below), not hand-written.
 - `smart-bury-kill-current-buffer` — like `kill-current-buffer`, but
-  smart.
+  smart (also generated; see below).
 - `smart-bury-switch-through-buffers` — cumulatively switch to the
   next recently-used buffer on every press (no underlying Emacs
   command — this one is specific to Smart Bury).
@@ -64,6 +65,27 @@ third-party keybindings) keeps working, just smarter:
 `smart-bury-switch-to-other-buffer` have no vanilla command to remap
 from, so pick whatever keys suit you.  Aligned to the recommendation
 inhere, we suggest binding `bury-buffer` to `C-x -`.)
+
+### Wrapping other commands
+
+`smart-bury-quit-window` and `smart-bury-kill-current-buffer` aren't
+hand-written — they're generated from `smart-bury-wrapped-commands`
+(default: `(quit-window kill-current-buffer)`), each entry FN getting
+a `smart-bury-FN` command that calls FN via the same cycling
+machinery as `smart-bury-bury-buffer`, reusing FN's own `interactive`
+spec. (`smart-bury-bury-buffer` itself is defined separately, since
+it alone has a fixed default keybinding, `C-x M--`, in
+`smart-bury-mode-map`.)
+
+Setting this variable — via `setopt` or `M-x customize-variable` —
+regenerates the wrapper commands immediately, and keeps
+`smart-bury-commands`, `smart-bury-mode-map`'s remaps, and
+`smart-bury-repeat-map`'s properties in sync. For example, to drop
+`kill-current-buffer` entirely and instead wrap `View-quit`:
+
+```elisp
+(setopt smart-bury-wrapped-commands '(quit-window View-quit))
+```
 
 ### Repeating with `repeat-mode`
 
