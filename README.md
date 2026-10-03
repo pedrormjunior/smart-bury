@@ -65,6 +65,43 @@ third-party keybindings) keeps working, just smarter:
 from, so pick whatever keys suit you.  Aligned to the recommendation
 inhere, we suggest binding `bury-buffer` to `C-x -`.)
 
+### Repeating with `repeat-mode`
+
+All five Smart Bury commands declare a `repeat-map`, so if you already
+have Emacs's built-in `repeat-mode` turned on, invoking one of them
+lets you repeat it with just a single key afterward instead of
+retyping the whole chord — e.g. after `C-x _`, pressing `_` again
+keeps cycling. `smart-bury-mode` does not enable `repeat-mode` itself
+(it's an independent, global setting unrelated to Smart Bury's own
+purpose); turn it on yourself if you want this (recommended):
+
+```elisp
+(repeat-mode 1)
+```
+
+Smart Bury also sets `repeat-check-key` to `no`, so the repeat-map
+arms regardless of *which key actually invoked the command* — not just
+its default binding. This matters most for `smart-bury-quit-window`
+and `smart-bury-kill-current-buffer`: they only reach the user via a
+remap of whatever key `quit-window`/`kill-current-buffer` are bound to
+(e.g. `q` in many read-only modes), so there's no fixed key of their
+own to require. With the check relaxed, even invoking one of those
+through such a mode-local `q` arms the map — meaning, for instance,
+that after `q` is pressed in a certain read-only mode, the user is
+ready to navigate through the buffers in repeat-mode.
+
+If one prefers to disable this behavior, it is enough to `(put
+'smart-bury-<function> 'repeat-check-key t)`.
+
+Neither `smart-bury-quit-window` nor `smart-bury-kill-current-buffer`
+has a default key of its own in `smart-bury-repeat-map` (unlike the
+other three) — add one yourself, using whichever key you actually
+invoke it with, e.g. for a `kill-current-buffer` bound to `M-Q`:
+
+```elisp
+(define-key smart-bury-repeat-map (kbd "M-Q") #'smart-bury-kill-current-buffer)
+```
+
 By default, Smart Bury only considers buffers from the current
 frame. To consider recently-used buffers across all frames instead,
 customize `smart-bury-same-frame`:

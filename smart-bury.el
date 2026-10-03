@@ -201,6 +201,36 @@ via `define-key') before or after enabling the mode to change them."
   :group 'smart-bury
   :keymap smart-bury-mode-map)
 
+(defvar smart-bury-repeat-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "_" #'smart-bury-switch-through-buffers)
+    (define-key map (kbd "M-_") #'smart-bury-switch-to-other-buffer)
+    (define-key map (kbd "M--") #'smart-bury-bury-buffer)
+    map)
+  "Keymap letting `repeat-mode' repeat Smart Bury's commands with a
+single key once invoked.
+
+All five Smart Bury commands set `repeat-check-key' to `no' below,
+so this map arms regardless of which key actually invoked the
+command -- including `smart-bury-quit-window' and
+`smart-bury-kill-current-buffer', which only reach the user via a
+remap of whatever key `quit-window'/`kill-current-buffer' are bound
+to (e.g. \"q\" in many read-only modes), and so have no fixed \"last
+key\" of their own to require.  Neither has a default binding in
+this map; add one yourself (and bind the matching vanilla command,
+if needed) to make it repeatable with that key.
+
+This has no effect unless the user has enabled `repeat-mode'
+themselves; `smart-bury-mode' does not turn it on.")
+
+(dolist (command '(smart-bury-switch-through-buffers
+                   smart-bury-switch-to-other-buffer
+                   smart-bury-bury-buffer
+                   smart-bury-quit-window
+                   smart-bury-kill-current-buffer))
+  (put command 'repeat-map 'smart-bury-repeat-map)
+  (put command 'repeat-check-key 'no))
+
 (provide 'smart-bury)
 
 ;;; smart-bury.el ends here

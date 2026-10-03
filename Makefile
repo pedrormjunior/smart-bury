@@ -5,4 +5,4 @@ test:
 	  -f ert-run-tests-batch-and-exit
 
 test-interactively:
-	emacs -Q -L . -l smart-bury --eval "(smart-bury-mode 1)"
+	emacs -Q -L . -l smart-bury -l test-interactively
