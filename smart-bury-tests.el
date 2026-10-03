@@ -341,6 +341,44 @@ restores the previous configuration afterward."
     (should (equal smart-bury-wrapped-commands before))
     (should (memq 'smart-bury-quit-window smart-bury-commands))))
 
+(ert-deftest smart-bury-test-wrapped-commands-skips-undefined-command-with-warning ()
+  "Setting the list to include a wholly undefined symbol skips it
+with a warning instead of erroring: the other, valid entries in the
+same list still get wrapped normally, `smart-bury-commands' only
+includes the valid ones, and no dangling remap is left for the bad
+one.  This is a regression test: an earlier version signaled a
+`user-error' for any invalid entry, which -- since this runs as the
+defcustom's `:set' function -- could abort the very `require' that
+loads `smart-bury.el' if a stale saved Customize value referenced a
+since-renamed/removed command, taking the whole package down over
+one bad entry."
+  (let (warnings)
+    (cl-letf (((symbol-function 'display-warning)
+               (lambda (type message &rest _) (push (cons type message) warnings))))
+      (smart-bury-test-with-wrapped-commands
+          '(quit-window totally-undefined-xyz-zzz kill-current-buffer)
+        (should warnings)
+        (should-not (fboundp 'smart-bury-totally-undefined-xyz-zzz))
+        (should-not (memq 'smart-bury-totally-undefined-xyz-zzz smart-bury-commands))
+        (should-not (lookup-key smart-bury-mode-map [remap totally-undefined-xyz-zzz]))
+        (should (memq 'smart-bury-quit-window smart-bury-commands))
+        (should (memq 'smart-bury-kill-current-buffer smart-bury-commands))
+        (should (eq (lookup-key smart-bury-mode-map [remap quit-window])
+                   #'smart-bury-quit-window))))))
+
+(ert-deftest smart-bury-test-wrapped-commands-skips-non-interactive-function-with-warning ()
+  "A defined-but-non-interactive function (no `interactive' spec) is
+skipped the same way as a wholly undefined symbol, with a warning
+instead of an error."
+  (should-not (interactive-form #'+)) ; sanity: `+' is real but non-interactive
+  (let (warnings)
+    (cl-letf (((symbol-function 'display-warning)
+               (lambda (type message &rest _) (push (cons type message) warnings))))
+      (smart-bury-test-with-wrapped-commands '(quit-window +)
+        (should warnings)
+        (should-not (fboundp 'smart-bury-+))
+        (should (memq 'smart-bury-quit-window smart-bury-commands))))))
+
 (provide 'smart-bury-tests)
 
 ;;; smart-bury-tests.el ends here

@@ -244,29 +244,47 @@ themselves; `smart-bury-mode' does not turn it on.")
 
 (defun smart-bury--set-wrapped-commands (symbol value)
   "Regenerate the wrapper commands, `smart-bury-commands', and
-`smart-bury-mode-map' to match VALUE."
+`smart-bury-mode-map' to match VALUE.
+
+Any entry in VALUE that isn't a usable interactive command (e.g.
+undefined -- as can happen with a stale saved Customize value
+referring to a command from a since-updated or removed dependency,
+evaluated only once `smart-bury.el' itself finally loads -- or a
+plain non-interactive function) is skipped with a warning rather
+than erroring: failing to wrap one stale entry is no reason to break
+the rest of this variable, or abort whatever `require'd this file in
+the first place."
   (set-default symbol value)
-  (setq smart-bury-commands
-        (append '(smart-bury-switch-through-buffers
-                   smart-bury-switch-to-other-buffer
-                   smart-bury-bury-buffer)
-                (mapcar #'smart-bury--wrapper-name value)))
-  ;; `define-minor-mode' captured `smart-bury-mode-map' by value, not
-  ;; by live symbol lookup, so if the mode is already enabled, only
-  ;; mutating this same keymap OBJECT (not reassigning the variable to
-  ;; a new one) keeps the change in effect.  Rebuilding fresh from
-  ;; `smart-bury--mode-map-base' each time (rather than layering onto
-  ;; whatever `smart-bury-mode-map' currently holds) ensures a command
-  ;; removed from VALUE loses its remap instead of it lingering from a
-  ;; previous call.
-  (let ((fresh (copy-keymap smart-bury--mode-map-base)))
-    (dolist (fn value)
-      (define-key fresh (vector 'remap fn) (smart-bury--wrapper-name fn)))
-    (setcdr smart-bury-mode-map (cdr fresh)))
-  (dolist (fn value)
-    (smart-bury--define-wrapper fn)
-    (put (smart-bury--wrapper-name fn) 'repeat-map 'smart-bury-repeat-map)
-    (put (smart-bury--wrapper-name fn) 'repeat-check-key 'no)))
+  (let ((valid (seq-filter (lambda (fn)
+                             (or (interactive-form fn)
+                                 (progn
+                                   (display-warning
+                                    'smart-bury
+                                    (format "`%s' is not an interactive command; not wrapping it" fn)
+                                    :warning)
+                                   nil)))
+                           value)))
+    (setq smart-bury-commands
+          (append '(smart-bury-switch-through-buffers
+                     smart-bury-switch-to-other-buffer
+                     smart-bury-bury-buffer)
+                  (mapcar #'smart-bury--wrapper-name valid)))
+    ;; `define-minor-mode' captured `smart-bury-mode-map' by value, not
+    ;; by live symbol lookup, so if the mode is already enabled, only
+    ;; mutating this same keymap OBJECT (not reassigning the variable
+    ;; to a new one) keeps the change in effect.  Rebuilding fresh from
+    ;; `smart-bury--mode-map-base' each time (rather than layering onto
+    ;; whatever `smart-bury-mode-map' currently holds) ensures a
+    ;; command removed from VALID loses its remap instead of it
+    ;; lingering from a previous call.
+    (let ((fresh (copy-keymap smart-bury--mode-map-base)))
+      (dolist (fn valid)
+        (define-key fresh (vector 'remap fn) (smart-bury--wrapper-name fn)))
+      (setcdr smart-bury-mode-map (cdr fresh)))
+    (dolist (fn valid)
+      (smart-bury--define-wrapper fn)
+      (put (smart-bury--wrapper-name fn) 'repeat-map 'smart-bury-repeat-map)
+      (put (smart-bury--wrapper-name fn) 'repeat-check-key 'no))))
 
 (defcustom smart-bury-wrapped-commands '(quit-window kill-current-buffer)
   "Vanilla commands to generate a `smart-bury-FN' wrapper for.
