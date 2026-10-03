@@ -2,11 +2,10 @@
 
 `bury-buffer`, `quit-window`, and `kill-current-buffer` all drop you
 on *some* buffer afterward, but not necessarily a useful one — Emacs
-picks it from its own internal buffer list, which doesn't line up
-with what you, the user, were recently looking at. Press the same
-key a few times in a row to get rid of several buffers, and you can
-easily end up stranded somewhere unrelated to anything you were
-working on.
+picks it from its own internal buffer list, which might not line up
+with what you, the user, want to focus. Press the same key a few times
+in a row to get rid of several buffers, and you can easily end up
+stranded somewhere unrelated to anything you were working on.
 
 Smart Bury wraps those three commands (plus two buffer-switching
 commands of its own) so that a *sequence* of presses walks you
@@ -40,13 +39,14 @@ working, just smarter:
   :bind (([remap bury-buffer]          . smart-bury-bury-buffer)
          ([remap quit-window]          . smart-bury-quit-window)
          ([remap kill-current-buffer]  . smart-bury-kill-current-buffer)
-         ("C-c b" . smart-bury-switch-through-buffers)
-         ("C-c o" . smart-bury-switch-to-other-buffer)))
+         ("C-x _" . smart-bury-switch-through-buffers)
+         ("C-x M-_" . smart-bury-switch-to-other-buffer)))
 ```
 
 (`smart-bury-switch-through-buffers` and
 `smart-bury-switch-to-other-buffer` have no vanilla command to remap
-from, so pick whatever keys suit you.)
+from, so pick whatever keys suit you.  Aligned to the recommendation
+inhere, we suggest binding `bury-buffer` to `C-x -`.)
 
 By default, Smart Bury only considers buffers from the current
 frame. To consider recently-used buffers across all frames instead,
