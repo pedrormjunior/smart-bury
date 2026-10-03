@@ -29,16 +29,33 @@ are.
 
 ## Configuration
 
-Smart Bury doesn't bind any keys itself. The intended setup is to
-remap the vanilla commands to their Smart Bury equivalents, so your
-existing muscle memory (and any third-party keybindings) keeps
-working, just smarter:
+Smart Bury doesn't bind any keys itself by default, but it ships a
+global minor mode, `smart-bury-mode`, that does: enable it and the
+vanilla commands (`bury-buffer`, `quit-window`,
+`kill-current-buffer`) are remapped to their Smart Bury equivalents
+everywhere, plus `C-x _` and `C-x M-_` are bound to
+`smart-bury-switch-through-buffers` and
+`smart-bury-switch-to-other-buffer`:
+
+```elisp
+(use-package smart-bury
+  :config (smart-bury-mode 1))
+```
+
+See `smart-bury-mode-map` for the exact bindings; `define-key` into
+it (before or after enabling the mode) to change any of them.
+
+If you'd rather not use the mode — e.g. to pick your own keys
+instead of its defaults — remap the vanilla commands to their Smart
+Bury equivalents yourself, so your existing muscle memory (and any
+third-party keybindings) keeps working, just smarter:
 
 ```elisp
 (use-package smart-bury
   :bind (([remap bury-buffer]          . smart-bury-bury-buffer)
          ([remap quit-window]          . smart-bury-quit-window)
          ([remap kill-current-buffer]  . smart-bury-kill-current-buffer)
+         ("C-x M--" . bury-buffer)
          ("C-x _" . smart-bury-switch-through-buffers)
          ("C-x M-_" . smart-bury-switch-to-other-buffer)))
 ```

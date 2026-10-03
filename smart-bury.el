@@ -177,6 +177,30 @@ For more documentation, see `kill-current-buffer'."
   (when (called-interactively-p 'interactive)
     (message "Smart Bury: killed buffer, now at %s" (buffer-name))))
 
+(defvar smart-bury-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [remap bury-buffer] #'smart-bury-bury-buffer)
+    (define-key map [remap quit-window] #'smart-bury-quit-window)
+    (define-key map [remap kill-current-buffer] #'smart-bury-kill-current-buffer)
+    (define-key map (kbd "C-x M--") #'bury-buffer)
+    (define-key map (kbd "C-x _") #'smart-bury-switch-through-buffers)
+    (define-key map (kbd "C-x M-_") #'smart-bury-switch-to-other-buffer)
+    map)
+  "Keymap for `smart-bury-mode'.")
+
+;;;###autoload
+(define-minor-mode smart-bury-mode
+  "Globally remap `bury-buffer', `quit-window', and
+`kill-current-buffer' to their Smart Bury equivalents, and bind
+`smart-bury-switch-through-buffers' and
+`smart-bury-switch-to-other-buffer'.
+
+See `smart-bury-mode-map' for the bindings, and customize it (e.g.
+via `define-key') before or after enabling the mode to change them."
+  :global t
+  :group 'smart-bury
+  :keymap smart-bury-mode-map)
+
 (provide 'smart-bury)
 
 ;;; smart-bury.el ends here

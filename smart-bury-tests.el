@@ -30,6 +30,16 @@ always kill the buffers afterward, even if BODY signals an error."
                                 (kill-buffer ,(car b))))
                  bindings))))
 
+(defmacro smart-bury-test-with-mode (&rest body)
+  "Run BODY with `smart-bury-mode' enabled, always disabling it
+afterward even if BODY signals an error."
+  (declare (indent 0))
+  `(unwind-protect
+       (progn
+         (smart-bury-mode 1)
+         ,@body)
+     (smart-bury-mode -1)))
+
 (defmacro smart-bury-test-with-buffer-list (buffers &rest body)
   "Run BODY with `buffer-list' stubbed to always return the live
 buffers among BUFFERS. This isolates tests of the public commands
@@ -235,6 +245,37 @@ test above); this widens the probe to a repeated-call sequence."
       (let ((last-command 'smart-bury-kill-current-buffer))
         (smart-bury-kill-current-buffer))
       (should (buffer-live-p (current-buffer))))))
+
+;;; `smart-bury-mode'
+
+(ert-deftest smart-bury-test-mode-binds-switch-commands ()
+  "Enabling the mode binds its two keys to the Smart Bury
+switching commands; disabling it removes them again."
+  (smart-bury-test-with-mode
+    (should (eq (key-binding (kbd "C-x _")) #'smart-bury-switch-through-buffers))
+    (should (eq (key-binding (kbd "C-x M-_")) #'smart-bury-switch-to-other-buffer)))
+  (should-not (eq (key-binding (kbd "C-x _")) #'smart-bury-switch-through-buffers))
+  (should-not (eq (key-binding (kbd "C-x M-_")) #'smart-bury-switch-to-other-buffer)))
+
+(ert-deftest smart-bury-test-mode-map-remaps-vanilla-commands ()
+  "The mode's keymap remaps the three vanilla commands to their
+Smart Bury equivalents, regardless of what key they are bound to."
+  (should (eq (lookup-key smart-bury-mode-map [remap bury-buffer])
+             #'smart-bury-bury-buffer))
+  (should (eq (lookup-key smart-bury-mode-map [remap quit-window])
+             #'smart-bury-quit-window))
+  (should (eq (lookup-key smart-bury-mode-map [remap kill-current-buffer])
+             #'smart-bury-kill-current-buffer)))
+
+(ert-deftest smart-bury-test-mode-remap-active-when-enabled ()
+  "`command-remapping' only resolves `bury-buffer' to
+`smart-bury-bury-buffer' while the mode is enabled -- i.e. the remap
+is actually live in the active keymaps, not just present in
+`smart-bury-mode-map' in isolation."
+  (should-not (command-remapping 'bury-buffer))
+  (smart-bury-test-with-mode
+    (should (eq (command-remapping 'bury-buffer) #'smart-bury-bury-buffer)))
+  (should-not (command-remapping 'bury-buffer)))
 
 (provide 'smart-bury-tests)
 
