@@ -224,6 +224,29 @@ still passed)."
       (smart-bury-switch-to-other-buffer))
     (should (eq (current-buffer) a))))
 
+(ert-deftest smart-bury-test-switch-to-other-buffer-alternates-back-and-forth ()
+  "A fresh call to `smart-bury-switch-to-other-buffer' switches to the
+\"other\" buffer; calling it again (continuing the sequence) switches
+back to the buffer the sequence started from; calling it a third
+time switches to that same \"other\" buffer again -- i.e. it keeps
+alternating between exactly the same two buffers.
+
+Like `smart-bury-test-switch-through-then-switch-to-other-returns-to-origin'
+above, this does NOT stub `buffer-list': the alternation depends on
+the real, dynamic most-recently-used buffer ordering."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
+    (switch-to-buffer a)
+    (let ((last-command 'some-other-command))
+      (smart-bury-switch-to-other-buffer))
+    (should-not (eq (current-buffer) a))
+    (let ((other (current-buffer)))
+      (let ((last-command 'smart-bury-switch-to-other-buffer))
+        (smart-bury-switch-to-other-buffer))
+      (should (eq (current-buffer) a))
+      (let ((last-command 'smart-bury-switch-to-other-buffer))
+        (smart-bury-switch-to-other-buffer))
+      (should (eq (current-buffer) other)))))
+
 (ert-deftest smart-bury-test-switch-to-other-buffer-targets-second ()
   "Regardless of any counter left over from a previous sequence,
 `smart-bury-switch-to-other-buffer' always targets the 2nd buffer."

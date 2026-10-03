@@ -130,7 +130,13 @@ Also, take, into account the buffer configuration."
   (setq smart-bury-counter (1+ smart-bury-counter)))
 
 (defun smart-bury-switch-to-other-buffer nil
-  "Smartly switch to other buffer."
+  "Smartly switch to the other buffer.
+Switches to the buffer the user was in when the current Smart Bury
+sequence began (`smart-bury-initial-buffer').  If already back on
+that buffer -- either because this starts a fresh sequence, or
+because the user switched back to it already -- switches instead to
+the \"other\" buffer, the next most recently used one.  Calling this
+repeatedly therefore alternates back and forth between the two."
   (interactive)
   (setq smart-bury-counter
         (if (or (smart-bury--starts-now-p)

@@ -1,18 +1,55 @@
 # Smart Bury
 
-`bury-buffer`, `quit-window`, and `kill-current-buffer` all drop you
-on *some* buffer afterward, but not necessarily a useful one — Emacs
-picks it from its own internal buffer list, which might not line up
-with what you, the user, want to focus. Press the same key a few times
-in a row to get rid of several buffers, and you can easily end up
-stranded somewhere unrelated to anything you were working on.
+The idea behind Smart Bury is in its name: *bury*, not banish. Getting
+a buffer out of the way need not mean losing track of it — it should
+remain one keystroke away, simply no longer in front. That is a
+different mindset from "close" or "discard": the buffer is not
+finished with, only no longer in focus *right now*. Smart Bury has no
+notion of which buffer is actually wanted next — that choice stays
+with whoever is pressing the key — it only makes repeated presses of
+the same key land somewhere deliberate, instead of wherever Emacs's
+own internal bookkeeping happens to produce.
 
-Smart Bury wraps those three commands (plus two buffer-switching
-commands of its own) so that a *sequence* of presses walks you
-through your own recently-used buffers instead, one per press,
-cycling back around once it runs out. Stop pressing, do something
-else, and the next press starts a fresh sequence from wherever you
-are.
+Smart Bury wraps `bury-buffer`, `quit-window`, and
+`kill-current-buffer` — and adds two buffer-switching commands of its
+own — so that a *sequence* of presses walks through recently-used
+buffers, one per press, cycling back around once it runs out. Once
+the sequence is interrupted by some other command, the next press
+starts a fresh sequence from wherever focus happens to be.
+
+Consider three buffers — A, B, and C — in active use, shown one at a
+time in a single window with no split needed. Switching to whichever
+of the other two was used most recently costs nothing: `C-x b RET`
+already defaults to it. Reaching the third one does not: Emacs offers
+only that one default target, so getting to the other one means
+typing its name in full. Repeated plain `bury-buffer` presses do not
+reliably help either, since each one's target is simply whatever that
+window's own history happens to contain, not a deliberate choice.
+
+Starting in A, switching to B costs nothing, as above. Done with B,
+and really wanting C, burying it with plain `bury-buffer` returns to
+A — not C, since A is only what that window showed right before B.
+`smart-bury-bury-buffer` behaves the same way on this first press,
+also landing on A; but burying again, continuing the same sequence,
+reaches C directly — without a buffer name ever being typed.
+
+`smart-bury-switch-through-buffers` has no equivalent among the
+vanilla commands at all, and is useful well beyond that one case.
+Starting in A and heading for C, with B expected to be useful again
+shortly, two presses reach C directly. After working there, two more
+presses lead back toward B — the first already passing through A,
+which is never out of reach even while attention is elsewhere.
+
+Pressing the same key repeatedly like this is, in fact, the whole
+point, which is why
+[Repeating with `repeat-mode`](#repeating-with-repeat-mode) below
+matters: each pair of presses above — the two that reach C, and
+later the two that head back toward B — reduces to one chord (`C-x
+_`) followed by a single tap of the last key, with work on C in
+between resetting the count, as it should. Everything here assumes
+one window showing one buffer at a time for simplicity, but the same
+mechanism applies unchanged with buffers split across several windows
+instead.
 
 ## Commands
 
@@ -24,9 +61,11 @@ are.
 - `smart-bury-switch-through-buffers` — cumulatively switch to the
   next recently-used buffer on every press (no underlying Emacs
   command — this one is specific to Smart Bury).
-- `smart-bury-switch-to-other-buffer` — jump straight to the
-  previous buffer, like a quick "toggle back" (also specific to
-  Smart Bury).
+- `smart-bury-switch-to-other-buffer` — switches to the buffer the current
+  sequence started from. If already back on that buffer, switches
+  instead to the "other" (next most recently used) buffer, so
+  pressing it repeatedly toggles back and forth between the two (also
+  specific to Smart Bury).
 
 ## Configuration
 
