@@ -122,15 +122,14 @@ current buffer."
 
 (defun smart-bury--go-through-buffers (buffers &optional allow-current)
   "Go through `smart-bury-counter' buffers of BUFFERS.
-Switch to each of them except the last one, which is returned instead.
-When ALLOW-CURRENT is non-nil, the current buffer is accepted as a
-valid buffer for selection.
+Switch to each of them except the last one, in reverse order (so the
+first one ends up current), and return the last one instead.  When
+ALLOW-CURRENT is non-nil, the current buffer is accepted as a valid
+buffer for selection.
 
 When `smart-bury-counter' exceeds the number of eligible buffers,
-wrap around and cycle through them again, switching through every
-eligible buffer once per lap.  Signal a `user-error' when there are
-no eligible buffers to cycle through at all, instead of looping
-forever chasing a target that can never be reached."
+wrap around and cycle through them again.  Signal a `user-error' when
+there are no eligible buffers at all."
   (cl-assert (>= smart-bury-counter 1))
   (let ((eligible (seq-filter
                    (lambda (buffer)
@@ -138,22 +137,15 @@ forever chasing a target that can never be reached."
                    buffers)))
     (when (null eligible)
       (user-error "Smart Bury: no eligible buffer to switch to"))
-    (let ((counter 0)
-          buffer-selection)
-      ;; Cycle through all eligible buffers again if necessary.  Since
-      ;; ELIGIBLE is non-empty, every lap makes progress, so this
-      ;; always terminates within `smart-bury-counter' laps.
-      (while (< counter smart-bury-counter)
-        (catch 'finish
-          (seq-doseq (buffer eligible)
-            (push buffer buffer-selection)
-            (setq counter (1+ counter))
-            (when (eq counter smart-bury-counter)
-              (throw 'finish nil)))))
-      (cl-assert (= counter (length buffer-selection) smart-bury-counter))
-      (seq-doseq (buffer (cdr buffer-selection))
-        (switch-to-buffer buffer))
-      (car buffer-selection))))
+    (let* ((n (length eligible))
+           (selection (cl-loop for i below smart-bury-counter
+                               collect (nth (mod i n) eligible))))
+      ;; These intermediate switches are what keep the real
+      ;; most-recently-used order consistent with the counter, which
+      ;; `smart-bury-switch-to-other-buffer' relies on: never jump
+      ;; straight to the last buffer instead.
+      (mapc #'switch-to-buffer (reverse (butlast selection)))
+      (car (last selection)))))
 
 (defun smart-bury--run-function (func &rest r)
   "Run FUNC passing arguments in R to it, then switch smartly.
