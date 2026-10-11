@@ -432,11 +432,14 @@ variable (e.g. via `setopt' or Customize) updates
     (smart-bury-switch-through-buffers . "_")
     (smart-bury-switch-to-other-buffer . "M-_"))
   "Alist of (COMMAND . KEY) bound by `smart-bury-mode'.
-Each KEY, in `kbd' format, must be a single key: `smart-bury-mode'
-binds it after `smart-bury-prefix-key', and `smart-bury-repeat-map'
-binds it alone, so that COMMAND can be repeated with just that key
-under `repeat-mode'.  Setting this variable (e.g. via `setopt' or
-Customize) updates both keymaps immediately."
+Each KEY, in `kbd' format, must be a single key: `smart-bury-mode' binds
+it after `smart-bury-prefix-key', and `smart-bury-repeat-map' binds it
+alone, so that COMMAND can be repeated with just that key under
+`repeat-mode'.  The repeat key only takes effect after commands that arm
+`smart-bury-repeat-map', i.e., the three basic Smart Bury commands and
+the wrappers generated from `smart-bury-wrapped-commands'.  Setting this
+variable (e.g. via `setopt' or Customize) updates both keymaps
+immediately."
   :type '(alist :key-type function :value-type string)
   :group 'smart-bury
   :set #'smart-bury--set-and-rebuild)
