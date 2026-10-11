@@ -63,10 +63,15 @@
 (require 'cl-lib)
 (require 'seq)
 
-(defvar smart-bury-commands
+(defconst smart-bury--basic-commands
   '(smart-bury-switch-through-buffers
     smart-bury-switch-to-other-buffer
     smart-bury-bury-buffer)
+  "The three basic Smart Bury commands, which always exist.
+Unlike the wrappers generated from `smart-bury-wrapped-commands',
+they are defined by hand.")
+
+(defvar smart-bury-commands (copy-sequence smart-bury--basic-commands)
   "Commands allowed by Smart Bury without resetting configuration.
 Extended with each wrapper generated from `smart-bury-wrapped-commands'
 whenever that variable is set.")
@@ -326,11 +331,14 @@ vanilla command, if needed) to make it repeatable with that key.
 This has no effect unless the user has enabled `repeat-mode'
 themselves; `smart-bury-mode' does not turn it on.")
 
-(dolist (command '(smart-bury-switch-through-buffers
-                   smart-bury-switch-to-other-buffer
-                   smart-bury-bury-buffer))
+(defun smart-bury--make-repeatable (command)
+  "Make COMMAND arm `smart-bury-repeat-map' under `repeat-mode'.
+Set its `repeat-check-key' to `no' too, so the map arms whichever key
+invoked COMMAND (see `smart-bury-repeat-map')."
   (put command 'repeat-map 'smart-bury-repeat-map)
   (put command 'repeat-check-key 'no))
+
+(mapc #'smart-bury--make-repeatable smart-bury--basic-commands)
 
 (defvar smart-bury--valid-wrapped-commands nil
   "The valid entries of `smart-bury-wrapped-commands'.
@@ -437,14 +445,11 @@ the first place."
                            value)))
     (setq smart-bury--valid-wrapped-commands valid)
     (setq smart-bury-commands
-          (append '(smart-bury-switch-through-buffers
-                     smart-bury-switch-to-other-buffer
-                     smart-bury-bury-buffer)
+          (append smart-bury--basic-commands
                   (mapcar #'smart-bury--wrapper-name valid)))
     (dolist (fn valid)
       (smart-bury--define-wrapper fn)
-      (put (smart-bury--wrapper-name fn) 'repeat-map 'smart-bury-repeat-map)
-      (put (smart-bury--wrapper-name fn) 'repeat-check-key 'no))
+      (smart-bury--make-repeatable (smart-bury--wrapper-name fn)))
     (smart-bury--rebuild-keymaps)))
 
 (defcustom smart-bury-wrapped-commands '(quit-window kill-current-buffer)
