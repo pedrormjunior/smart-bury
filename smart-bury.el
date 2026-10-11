@@ -131,32 +131,44 @@ current buffer."
            (and allow-current
                 (eq buffer (current-buffer))))))
 
-(defun smart-bury--go-through-buffers (buffers &optional allow-current)
-  "Go through `smart-bury-counter' buffers of BUFFERS.
-Switch to each of them except the last one, in reverse order (so the
-first one ends up current), and return the last one instead.  When
-ALLOW-CURRENT is non-nil, the current buffer is accepted as a valid
-buffer for selection.
-
-When `smart-bury-counter' exceeds the number of eligible buffers,
-wrap around and cycle through them again.  Signal a `user-error' when
-there are no eligible buffers at all."
-  (cl-assert (>= smart-bury-counter 1))
+(defun smart-bury--select-buffers (buffers n &optional allow-current)
+  "Return the first N eligible buffers of BUFFERS.
+See `smart-bury--eligible-p' for ALLOW-CURRENT.  When N exceeds the
+number of eligible buffers, wrap around and cycle through them again.
+Signal a `user-error' when there are no eligible buffers at all."
+  (cl-assert (>= n 1))
   (let ((eligible (seq-filter
                    (lambda (buffer)
                      (smart-bury--eligible-p buffer allow-current))
                    buffers)))
     (when (null eligible)
       (user-error "Smart Bury: no eligible buffer to switch to"))
-    (let* ((n (length eligible))
-           (selection (cl-loop for i below smart-bury-counter
-                               collect (nth (mod i n) eligible))))
-      ;; These intermediate switches are what keep the real
-      ;; most-recently-used order consistent with the counter, which
-      ;; `smart-bury-switch-to-other-buffer' relies on: never jump
-      ;; straight to the last buffer instead.
-      (mapc #'switch-to-buffer (reverse (butlast selection)))
-      (car (last selection)))))
+    (let ((count (length eligible)))
+      (cl-loop for i below n
+               collect (nth (mod i count) eligible)))))
+
+(defun smart-bury--walk-back (selection)
+  "Switch to each buffer of SELECTION in reverse order.
+The first buffer of SELECTION thus ends up current, and the
+most-recently-used order of the others is rebuilt behind it, as
+if the user had never left it.  This is what lets
+`smart-bury-switch-to-other-buffer' return to the original buffer
+after a run of `smart-bury-switch-through-buffers' calls, with the
+\"list of all buffers\" as it was before -- so callers must never
+skip these intermediate switches by jumping straight to a buffer."
+  (mapc #'switch-to-buffer (reverse selection)))
+
+(defun smart-bury--go-through-buffers (buffers &optional allow-current)
+  "Go through `smart-bury-counter' buffers of BUFFERS.
+Walk back through all of them except the last one (see
+`smart-bury--walk-back'), and return the last one instead, for the
+caller to switch to.  See `smart-bury--select-buffers' for
+ALLOW-CURRENT, wrapping around, and the error when no buffer is
+eligible."
+  (let ((selection (smart-bury--select-buffers
+                    buffers smart-bury-counter allow-current)))
+    (smart-bury--walk-back (butlast selection))
+    (car (last selection))))
 
 (defun smart-bury--run-function (func &rest r)
   "Run FUNC passing arguments in R to it, then switch smartly.
@@ -206,7 +218,9 @@ repeatedly therefore alternates back and forth between the two."
         (if (smart-bury--maybe-restart-sequence)
             2
           (max 2 smart-bury-counter)))
-  (smart-bury--go-through-buffers (cdr (smart-bury--buffer-list)))
+  (smart-bury--walk-back
+   (smart-bury--select-buffers (cdr (smart-bury--buffer-list))
+                               (1- smart-bury-counter)))
   (when (called-interactively-p 'interactive)
     (message "Smart Bury: switched to %s" (buffer-name)))
   (setq smart-bury-counter 2))
