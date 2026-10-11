@@ -98,8 +98,7 @@ The Smart Bury commands are stored in `smart-bury-commands'.  When
 `last-command' was not a Smart Bury one, set `smart-bury-initial-buffer'
 to the buffer from which the first call to a Smart Bury command
 occurred."
-  (let ((smart-bury-command-p (seq-contains-p
-                              smart-bury-commands last-command 'eq)))
+  (let ((smart-bury-command-p (memq last-command smart-bury-commands)))
     (unless smart-bury-command-p
       (setq smart-bury-initial-buffer (current-buffer)))
     (not smart-bury-command-p)))
