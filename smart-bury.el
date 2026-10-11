@@ -91,6 +91,31 @@ whenever that variable is set.")
   :type 'boolean
   :group 'smart-bury)
 
+(defcustom smart-bury-messages t
+  "Whether Smart Bury commands report where they landed.
+When non-nil, each command called interactively shows a short message
+in the echo area, e.g. the buffer it switched to."
+  :type 'boolean
+  :group 'smart-bury)
+
+(defface smart-bury-message-prefix
+  '((t :inherit font-lock-type-face))
+  "Face for the \"Smart Bury\" label of Smart Bury's messages."
+  :group 'smart-bury)
+
+(defmacro smart-bury--report (format-string &rest args)
+  "Report a Smart Bury message built from FORMAT-STRING and ARGS.
+Show it only when `smart-bury-messages' is non-nil and the enclosing
+command was called interactively.  This is a macro so that
+`called-interactively-p' is evaluated in that command, not here.
+The message is prefixed with \"Smart Bury:\", the label shown in face
+`smart-bury-message-prefix'."
+  `(when (and smart-bury-messages
+              (called-interactively-p 'interactive))
+     (message "%s %s"
+              (propertize "Smart Bury:" 'face 'smart-bury-message-prefix)
+              (format-message ,format-string ,@args))))
+
 (defun smart-bury--buffer-list nil
   "Return `buffer-list' according to configuration.
 When `smart-bury-same-frame' is non-nil, the buffer list is in the scope
@@ -206,8 +231,7 @@ the buffers on the way."
     (setq smart-bury-counter 1))
   (switch-to-buffer
    (smart-bury--go-through-buffers (cdr (smart-bury--buffer-list))))
-  (when (called-interactively-p 'interactive)
-    (message "Smart Bury: buffer %d — %s" smart-bury-counter (buffer-name)))
+  (smart-bury--report "buffer %d — %s" smart-bury-counter (buffer-name))
   (setq smart-bury-counter (1+ smart-bury-counter)))
 
 (defun smart-bury-switch-to-other-buffer nil
@@ -226,8 +250,7 @@ repeatedly therefore alternates back and forth between the two."
   (smart-bury--walk-back
    (smart-bury--select-buffers (cdr (smart-bury--buffer-list))
                                (1- smart-bury-counter)))
-  (when (called-interactively-p 'interactive)
-    (message "Smart Bury: switched to %s" (buffer-name)))
+  (smart-bury--report "switched to %s" (buffer-name))
   (setq smart-bury-counter 2))
 
 (defun smart-bury-bury-buffer (&optional buffer-or-name)
@@ -238,8 +261,7 @@ the next buffer.
 For more documentation, see `bury-buffer'."
   (interactive "P")
   (smart-bury--run-function 'bury-buffer buffer-or-name)
-  (when (called-interactively-p 'interactive)
-    (message "Smart Bury: buried, now at %s" (buffer-name))))
+  (smart-bury--report "buried, now at %s" (buffer-name)))
 
 (defun smart-bury--wrapper-name (fn)
   "Return the symbol `smart-bury-FN' for vanilla command FN."
@@ -262,8 +284,7 @@ prefix-arg-driven KILL/WINDOW)."
        `(lambda (&rest args)
           ,iform
           (apply #'smart-bury--run-function ',fn args)
-          (when (called-interactively-p 'interactive)
-            (message "Smart Bury: ran `%s', now at %s" ',fn (buffer-name))))
+          (smart-bury--report "ran `%s', now at %s" ',fn (buffer-name)))
        t)
       (format "Smartly call `%s' and switch to the next buffer.\n\nFor more documentation, see `%s'." fn fn))))
 

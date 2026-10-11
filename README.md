@@ -249,6 +249,17 @@ customize `smart-bury-same-frame`, e.g.:
 (setopt smart-bury-same-frame nil)
 ```
 
+### Messages
+
+Each command reports where it landed in the echo area, labeled
+“Smart Bury:” in face `smart-bury-message-prefix` (which inherits
+`font-lock-type-face`, green in the default theme).
+To turn these messages off:
+
+```elisp
+(setopt smart-bury-messages nil)
+```
+
 ## Development
 
 See `IMPROVEMENTS.md` for known open issues, and run the test suite

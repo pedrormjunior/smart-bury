@@ -326,6 +326,47 @@ test above); this widens the probe to a repeated-call sequence."
         (smart-bury-kill-current-buffer))
       (should (buffer-live-p (current-buffer))))))
 
+;;; Messages
+
+(defmacro smart-bury-test-capturing-messages (&rest body)
+  "Run BODY as if its commands were called interactively.
+Stub `called-interactively-p' (always nil in batch) and capture each
+`message' instead of printing it.  Return the captured messages, in
+order."
+  (declare (indent 0))
+  `(let (messages)
+     (cl-letf (((symbol-function 'called-interactively-p) (lambda (&rest _) t))
+               ((symbol-function 'message)
+                (lambda (format-string &rest args)
+                  (push (apply #'format format-string args) messages))))
+       ,@body)
+     (nreverse messages)))
+
+(ert-deftest smart-bury-test-messages-labelled-in-face ()
+  "A command reports where it landed, with the \"Smart Bury:\" label in
+face `smart-bury-message-prefix'."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
+    (switch-to-buffer b)
+    (switch-to-buffer a)
+    (let* ((smart-bury-messages t)
+           (messages (smart-bury-test-capturing-messages
+                       (let ((last-command 'self-insert-command))
+                         (smart-bury-switch-to-other-buffer)))))
+      (should (equal (mapcar #'substring-no-properties messages)
+                     '("Smart Bury: switched to sb-b")))
+      (should (eq (get-text-property 0 'face (car messages))
+                  'smart-bury-message-prefix)))))
+
+(ert-deftest smart-bury-test-messages-disabled ()
+  "With `smart-bury-messages' nil, commands report nothing."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
+    (switch-to-buffer b)
+    (switch-to-buffer a)
+    (let ((smart-bury-messages nil))
+      (should-not (smart-bury-test-capturing-messages
+                    (let ((last-command 'self-insert-command))
+                      (smart-bury-switch-to-other-buffer)))))))
+
 ;;; README Introduction cases
 
 ;; Each test below replays one **Case** from the Introduction of
