@@ -187,46 +187,56 @@ prefix-arg-driven KILL/WINDOW)."
        t)
       (format "Smartly call `%s' and switch to the next buffer.\n\nFor more documentation, see `%s'." fn fn))))
 
-(defvar smart-bury--mode-map-base
-  (let ((map (make-sparse-keymap)))
-    (define-key map [remap bury-buffer] #'smart-bury-bury-buffer)
-    (define-key map (kbd "C-x M--") #'bury-buffer)
-    (define-key map (kbd "C-x _") #'smart-bury-switch-through-buffers)
-    (define-key map (kbd "C-x M-_") #'smart-bury-switch-to-other-buffer)
-    map)
-  "Fixed entries of `smart-bury-mode-map', unaffected by
-`smart-bury-wrapped-commands'.")
+(defvar smart-bury--mode-map-generated (make-sparse-keymap)
+  "Package-owned parent of `smart-bury-mode-map'.
+Rebuilt in place (same object -- see `smart-bury--rebuild-keymaps')
+from `smart-bury-prefix-key', `smart-bury-keys', and
+`smart-bury-wrapped-commands' every time one of them is set.")
 
-(defvar smart-bury-mode-map (copy-keymap smart-bury--mode-map-base)
+(defvar smart-bury-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map smart-bury--mode-map-generated)
+    map)
   "Keymap for `smart-bury-mode'.
-Rebuilt in place (same object -- see `smart-bury--set-wrapped-commands')
-from `smart-bury--mode-map-base' plus a remap entry per
-`smart-bury-wrapped-commands' entry, every time that variable is set.
-`define-minor-mode' captures this keymap by value, not by live symbol
-lookup, so it must be mutated rather than reassigned to stay in
-effect once `smart-bury-mode' is already enabled.")
+Its own bindings belong to the user: Smart Bury never touches them.
+The package's bindings live in its parent,
+`smart-bury--mode-map-generated', which is rebuilt in place whenever
+`smart-bury-prefix-key', `smart-bury-keys', or
+`smart-bury-wrapped-commands' is set.  (`define-minor-mode' captures
+this keymap by value, not by live symbol lookup, which is why the
+parent is mutated rather than any keymap being reassigned.)")
 
 ;;;###autoload
 (define-minor-mode smart-bury-mode
-  "Globally remap `bury-buffer', `quit-window', and
-`kill-current-buffer' to their Smart Bury equivalents, and bind
-`smart-bury-switch-through-buffers' and
-`smart-bury-switch-to-other-buffer'.
+  "Globally remap `bury-buffer' and every entry of
+`smart-bury-wrapped-commands' (by default `quit-window' and
+`kill-current-buffer') to their Smart Bury equivalents, and bind the
+commands in `smart-bury-keys' under `smart-bury-prefix-key'.
 
-See `smart-bury-mode-map' for the bindings, and customize it (e.g.
-via `define-key') before or after enabling the mode to change them."
+Customize those two options to change the keys.  Bindings added to
+`smart-bury-mode-map' itself (e.g. via `define-key') are preserved
+across any later customization."
   :global t
   :group 'smart-bury
   :keymap smart-bury-mode-map)
 
+(defvar smart-bury--repeat-map-generated (make-sparse-keymap)
+  "Package-owned parent of `smart-bury-repeat-map'.
+Rebuilt in place from `smart-bury-keys' (see
+`smart-bury--rebuild-keymaps').")
+
 (defvar smart-bury-repeat-map
   (let ((map (make-sparse-keymap)))
-    (define-key map "_" #'smart-bury-switch-through-buffers)
-    (define-key map (kbd "M-_") #'smart-bury-switch-to-other-buffer)
-    (define-key map (kbd "M--") #'smart-bury-bury-buffer)
+    (set-keymap-parent map smart-bury--repeat-map-generated)
     map)
   "Keymap letting `repeat-mode' repeat Smart Bury's commands with a
 single key once invoked.
+
+Each command in `smart-bury-keys' is repeatable with its own key
+(the one following `smart-bury-prefix-key'); those bindings live in
+the parent keymap, `smart-bury--repeat-map-generated'.  Bindings
+added to this keymap itself (e.g. via `define-key') belong to the
+user and are preserved across any later customization.
 
 Every Smart Bury command, including each one generated from
 `smart-bury-wrapped-commands', sets `repeat-check-key' to `no', so
@@ -247,6 +257,84 @@ themselves; `smart-bury-mode' does not turn it on.")
                    smart-bury-bury-buffer))
   (put command 'repeat-map 'smart-bury-repeat-map)
   (put command 'repeat-check-key 'no))
+
+(defvar smart-bury--valid-wrapped-commands nil
+  "The entries of `smart-bury-wrapped-commands' that were actually
+wrapped, i.e. without the invalid ones skipped with a warning.")
+
+(defun smart-bury--rebuild-keymaps ()
+  "Rebuild `smart-bury--mode-map-generated' and
+`smart-bury--repeat-map-generated' in place from
+`smart-bury-prefix-key', `smart-bury-keys', and
+`smart-bury--valid-wrapped-commands'.
+
+Does nothing until all of Smart Bury's options are defined: each
+option's `:set' calls this function, and `custom-initialize-reset'
+runs that `:set' while `smart-bury.el' is still loading, before the
+options defined after it exist.  The last one defined triggers the
+first full build.
+
+An entry of `smart-bury-keys' whose key is not a single event is
+skipped with a warning rather than erroring, since that key also
+serves as the command's single-key repeat in
+`smart-bury-repeat-map'."
+  (when (and (boundp 'smart-bury-prefix-key)
+             (boundp 'smart-bury-keys)
+             (boundp 'smart-bury-wrapped-commands))
+    (let ((mode-map (make-sparse-keymap))
+          (repeat-map (make-sparse-keymap))
+          (prefix (kbd smart-bury-prefix-key)))
+      (define-key mode-map [remap bury-buffer] #'smart-bury-bury-buffer)
+      (dolist (entry smart-bury-keys)
+        (let* ((command (car entry))
+               (key (cdr entry))
+               (event (and (stringp key) (ignore-errors (kbd key)))))
+          (if (= (length event) 1)
+              (progn
+                (define-key mode-map (vconcat prefix event) command)
+                (define-key repeat-map event command))
+            (display-warning
+             'smart-bury
+             (format "Key %S for `%s' is not a single key; not binding it"
+                     key command)
+             :warning))))
+      (dolist (fn smart-bury--valid-wrapped-commands)
+        (define-key mode-map (vector 'remap fn) (smart-bury--wrapper-name fn)))
+      ;; Mutate the parents in place: `smart-bury-mode-map' and
+      ;; `smart-bury-repeat-map' keep pointing at these same objects,
+      ;; and the user's own bindings in those two maps stay untouched.
+      (setcdr smart-bury--mode-map-generated (cdr mode-map))
+      (setcdr smart-bury--repeat-map-generated (cdr repeat-map)))))
+
+(defun smart-bury--set-and-rebuild (symbol value)
+  "Set SYMBOL to VALUE and rebuild Smart Bury's keymaps.
+Used as the `:set' function of `smart-bury-prefix-key' and
+`smart-bury-keys'."
+  (set-default symbol value)
+  (smart-bury--rebuild-keymaps))
+
+(defcustom smart-bury-prefix-key "C-x"
+  "Prefix key for the commands in `smart-bury-keys', in `kbd' format.
+May be the empty string, to bind those keys directly.  Setting this
+variable (e.g. via `setopt' or Customize) updates
+`smart-bury-mode-map' immediately."
+  :type 'string
+  :group 'smart-bury
+  :set #'smart-bury--set-and-rebuild)
+
+(defcustom smart-bury-keys
+  '((smart-bury-bury-buffer            . "M--")
+    (smart-bury-switch-through-buffers . "_")
+    (smart-bury-switch-to-other-buffer . "M-_"))
+  "Alist of (COMMAND . KEY) bound by `smart-bury-mode'.
+Each KEY, in `kbd' format, must be a single key: `smart-bury-mode'
+binds it after `smart-bury-prefix-key', and `smart-bury-repeat-map'
+binds it alone, so that COMMAND can be repeated with just that key
+under `repeat-mode'.  Setting this variable (e.g. via `setopt' or
+Customize) updates both keymaps immediately."
+  :type '(alist :key-type function :value-type string)
+  :group 'smart-bury
+  :set #'smart-bury--set-and-rebuild)
 
 (defun smart-bury--set-wrapped-commands (symbol value)
   "Regenerate the wrapper commands, `smart-bury-commands', and
@@ -270,35 +358,25 @@ the first place."
                                     :warning)
                                    nil)))
                            value)))
+    (setq smart-bury--valid-wrapped-commands valid)
     (setq smart-bury-commands
           (append '(smart-bury-switch-through-buffers
                      smart-bury-switch-to-other-buffer
                      smart-bury-bury-buffer)
                   (mapcar #'smart-bury--wrapper-name valid)))
-    ;; `define-minor-mode' captured `smart-bury-mode-map' by value, not
-    ;; by live symbol lookup, so if the mode is already enabled, only
-    ;; mutating this same keymap OBJECT (not reassigning the variable
-    ;; to a new one) keeps the change in effect.  Rebuilding fresh from
-    ;; `smart-bury--mode-map-base' each time (rather than layering onto
-    ;; whatever `smart-bury-mode-map' currently holds) ensures a
-    ;; command removed from VALID loses its remap instead of it
-    ;; lingering from a previous call.
-    (let ((fresh (copy-keymap smart-bury--mode-map-base)))
-      (dolist (fn valid)
-        (define-key fresh (vector 'remap fn) (smart-bury--wrapper-name fn)))
-      (setcdr smart-bury-mode-map (cdr fresh)))
     (dolist (fn valid)
       (smart-bury--define-wrapper fn)
       (put (smart-bury--wrapper-name fn) 'repeat-map 'smart-bury-repeat-map)
-      (put (smart-bury--wrapper-name fn) 'repeat-check-key 'no))))
+      (put (smart-bury--wrapper-name fn) 'repeat-check-key 'no))
+    (smart-bury--rebuild-keymaps)))
 
 (defcustom smart-bury-wrapped-commands '(quit-window kill-current-buffer)
   "Vanilla commands to generate a `smart-bury-FN' wrapper for.
-`smart-bury-bury-buffer' is defined separately (it has its own
-default keybinding in `smart-bury-mode-map') and is not part of this
-list.  Setting this variable (e.g. via `setopt' or Customize)
-regenerates the wrapper commands and keeps `smart-bury-commands',
-`smart-bury-mode-map', and `smart-bury-repeat-map' in sync."
+`smart-bury-bury-buffer' is defined separately (it has its own entry
+in `smart-bury-keys') and is not part of this list.  Setting this
+variable (e.g. via `setopt' or Customize) regenerates the wrapper
+commands and keeps `smart-bury-commands', `smart-bury-mode-map', and
+`smart-bury-repeat-map' in sync."
   :type '(repeat function)
   :group 'smart-bury
   :set #'smart-bury--set-wrapped-commands)

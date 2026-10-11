@@ -55,6 +55,22 @@ error."
        (customize-set-variable 'smart-bury-wrapped-commands
                                smart-bury--orig-wrapped-commands))))
 
+(defmacro smart-bury-test-with-keys (prefix keys &rest body)
+  "Run BODY with `smart-bury-prefix-key' and `smart-bury-keys'
+temporarily set to PREFIX and KEYS (rebuilding Smart Bury's keymaps
+to match), always restoring the original values afterward even if
+BODY signals an error."
+  (declare (indent 2))
+  `(let ((smart-bury--orig-prefix-key smart-bury-prefix-key)
+         (smart-bury--orig-keys smart-bury-keys))
+     (unwind-protect
+         (progn
+           (customize-set-variable 'smart-bury-prefix-key ,prefix)
+           (customize-set-variable 'smart-bury-keys ,keys)
+           ,@body)
+       (customize-set-variable 'smart-bury-prefix-key smart-bury--orig-prefix-key)
+       (customize-set-variable 'smart-bury-keys smart-bury--orig-keys))))
+
 (defmacro smart-bury-test-with-buffer-list (buffers &rest body)
   "Run BODY with `buffer-list' stubbed to always return the live
 buffers among BUFFERS. This isolates tests of the public commands
@@ -314,6 +330,72 @@ is actually live in the active keymaps, not just present in
   (smart-bury-test-with-mode
     (should (eq (command-remapping 'bury-buffer) #'smart-bury-bury-buffer)))
   (should-not (command-remapping 'bury-buffer)))
+
+;;; `smart-bury-prefix-key' and `smart-bury-keys'
+
+(ert-deftest smart-bury-test-keys-custom-prefix-and-keys ()
+  "A custom prefix and keys bind the commands under the new keys,
+and the default `C-x _' no longer reaches the Smart Bury command."
+  (smart-bury-test-with-keys "C-c" '((smart-bury-switch-through-buffers . "n")
+                                    (smart-bury-switch-to-other-buffer . "o"))
+    (should (eq (lookup-key smart-bury-mode-map (kbd "C-c n"))
+                #'smart-bury-switch-through-buffers))
+    (should (eq (lookup-key smart-bury-mode-map (kbd "C-c o"))
+                #'smart-bury-switch-to-other-buffer))
+    (should-not (eq (lookup-key smart-bury-mode-map (kbd "C-x _"))
+                    #'smart-bury-switch-through-buffers))))
+
+(ert-deftest smart-bury-test-keys-repeat-map-follows-keys ()
+  "Each command's key is also its single-key repeat in
+`smart-bury-repeat-map', and the old repeat key goes away."
+  (smart-bury-test-with-keys "C-x" '((smart-bury-switch-through-buffers . "n"))
+    (should (eq (lookup-key smart-bury-repeat-map (kbd "n"))
+                #'smart-bury-switch-through-buffers))
+    (should-not (lookup-key smart-bury-repeat-map (kbd "_")))))
+
+(ert-deftest smart-bury-test-keys-empty-prefix-binds-bare-key ()
+  "An empty prefix binds each key directly."
+  (smart-bury-test-with-keys "" '((smart-bury-switch-through-buffers . "<f9>"))
+    (should (eq (lookup-key smart-bury-mode-map (kbd "<f9>"))
+                #'smart-bury-switch-through-buffers))))
+
+(ert-deftest smart-bury-test-keys-skips-multi-key-entry-with-warning ()
+  "A key that is not a single event is skipped with a warning; the
+other entries still get bound."
+  (let (warnings)
+    (cl-letf (((symbol-function 'display-warning)
+               (lambda (type message &rest _) (push (cons type message) warnings))))
+      (smart-bury-test-with-keys "C-x" '((smart-bury-switch-through-buffers . "a b")
+                                        (smart-bury-switch-to-other-buffer . "o"))
+        (should warnings)
+        (should-not (eq (lookup-key smart-bury-mode-map (kbd "C-x a b"))
+                        #'smart-bury-switch-through-buffers))
+        (should (eq (lookup-key smart-bury-mode-map (kbd "C-x o"))
+                    #'smart-bury-switch-to-other-buffer))))))
+
+(ert-deftest smart-bury-test-keys-user-mode-map-binding-survives ()
+  "A user's own binding in `smart-bury-mode-map' survives later
+customization of both `smart-bury-wrapped-commands' and
+`smart-bury-keys'."
+  (unwind-protect
+      (progn
+        (define-key smart-bury-mode-map (kbd "C-c z") #'ignore)
+        (smart-bury-test-with-wrapped-commands '(kill-current-buffer)
+          (should (eq (lookup-key smart-bury-mode-map (kbd "C-c z")) #'ignore)))
+        (smart-bury-test-with-keys "C-c" '((smart-bury-switch-through-buffers . "n"))
+          (should (eq (lookup-key smart-bury-mode-map (kbd "C-c z")) #'ignore))))
+    (define-key smart-bury-mode-map (kbd "C-c z") nil)))
+
+(ert-deftest smart-bury-test-keys-user-repeat-map-binding-survives ()
+  "A user's own binding in `smart-bury-repeat-map' survives later
+customization of `smart-bury-keys'."
+  (unwind-protect
+      (progn
+        (define-key smart-bury-repeat-map (kbd "M-Q") #'smart-bury-kill-current-buffer)
+        (smart-bury-test-with-keys "C-c" '((smart-bury-switch-through-buffers . "n"))
+          (should (eq (lookup-key smart-bury-repeat-map (kbd "M-Q"))
+                      #'smart-bury-kill-current-buffer))))
+    (define-key smart-bury-repeat-map (kbd "M-Q") nil)))
 
 ;;; `smart-bury-wrapped-commands'
 
