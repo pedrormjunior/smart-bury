@@ -146,25 +146,38 @@ reach."
                     :type 'user-error))))
 
 
-;;; `smart-bury--starts-now-p' / `smart-bury--is-initial-p'
+;;; `smart-bury--starts-now-p' / `smart-bury--maybe-start-sequence' /
+;;; `smart-bury--is-initial-p'
 
-(ert-deftest smart-bury-test-starts-now-p-fresh-command ()
-  "A LAST-COMMAND outside `smart-bury-commands' marks a fresh start
+(ert-deftest smart-bury-test-starts-now-p-is-pure ()
+  "`smart-bury--starts-now-p' only reports whether LAST-COMMAND is
+outside `smart-bury-commands'; it never touches the initial buffer."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
+    (setq smart-bury-initial-buffer a)
+    (with-current-buffer b
+      (let ((last-command 'some-other-command))
+        (should (smart-bury--starts-now-p)))
+      (let ((last-command 'smart-bury-bury-buffer))
+        (should-not (smart-bury--starts-now-p)))
+      (should (eq smart-bury-initial-buffer a)))))
+
+(ert-deftest smart-bury-test-maybe-start-sequence-fresh-command ()
+  "A LAST-COMMAND outside `smart-bury-commands' starts a new sequence
 and records the current buffer as the initial one."
   (smart-bury-test-with-buffers ((a "sb-a"))
     (with-current-buffer a
       (let ((last-command 'some-other-command))
-        (should (smart-bury--starts-now-p))
+        (should (smart-bury--maybe-start-sequence))
         (should (eq smart-bury-initial-buffer a))))))
 
-(ert-deftest smart-bury-test-starts-now-p-continuing ()
+(ert-deftest smart-bury-test-maybe-start-sequence-continuing ()
   "A LAST-COMMAND that is a Smart Bury command means we're
 continuing a sequence, and the initial buffer is left untouched."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
     (setq smart-bury-initial-buffer a)
     (with-current-buffer b
       (let ((last-command 'smart-bury-bury-buffer))
-        (should-not (smart-bury--starts-now-p))
+        (should-not (smart-bury--maybe-start-sequence))
         (should (eq smart-bury-initial-buffer a))))))
 
 (ert-deftest smart-bury-test-is-initial-p ()

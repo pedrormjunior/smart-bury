@@ -94,14 +94,17 @@ of the current frame."
 
 (defun smart-bury--starts-now-p nil
   "Check if `last-command' was *not* one of the Smart Bury ones.
-The Smart Bury commands are stored in `smart-bury-commands'.  When
-`last-command' was not a Smart Bury one, set `smart-bury-initial-buffer'
-to the buffer from which the first call to a Smart Bury command
-occurred."
-  (let ((smart-bury-command-p (memq last-command smart-bury-commands)))
-    (unless smart-bury-command-p
-      (setq smart-bury-initial-buffer (current-buffer)))
-    (not smart-bury-command-p)))
+The Smart Bury commands are stored in `smart-bury-commands'."
+  (not (memq last-command smart-bury-commands)))
+
+(defun smart-bury--maybe-start-sequence nil
+  "Start a new Smart Bury sequence if this call begins one.
+When `smart-bury--starts-now-p', set `smart-bury-initial-buffer' to
+the current buffer, i.e., the one from which the first call to a Smart
+Bury command occurred.  Return non-nil if a new sequence started."
+  (when (smart-bury--starts-now-p)
+    (setq smart-bury-initial-buffer (current-buffer))
+    t))
 
 (defun smart-bury--is-initial-p nil
   "Check if current buffer is the initial one."
@@ -152,11 +155,9 @@ there are no eligible buffers at all."
 Unless this call starts a fresh Smart Bury sequence, switch through
 `smart-bury-counter' buffers afterward, keeping
 `smart-bury-initial-buffer' in sync with where the sequence lands."
-  ;; `let*': `smart-bury--starts-now-p' must run first, since on a
-  ;; fresh sequence it sets `smart-bury-initial-buffer' to the current
-  ;; buffer, which WAS-INITIAL then sees (so it is always non-nil when
-  ;; STARTS-NOW is).
-  (let* ((starts-now (smart-bury--starts-now-p))
+  ;; `let*': a new sequence makes the current buffer the initial one,
+  ;; so WAS-INITIAL is always non-nil when STARTS-NOW is.
+  (let* ((starts-now (smart-bury--maybe-start-sequence))
          (was-initial (smart-bury--is-initial-p)))
     (apply func r)
     (when was-initial
@@ -176,7 +177,7 @@ The first call switches to the other buffer; each immediately
 following call goes one buffer further (3rd, 4th...), without burying
 the buffers on the way."
   (interactive)
-  (when (or (smart-bury--starts-now-p)
+  (when (or (smart-bury--maybe-start-sequence)
             (smart-bury--is-initial-p))
     (setq smart-bury-counter 1))
   (switch-to-buffer
@@ -195,7 +196,7 @@ the \"other\" buffer, the next most recently used one.  Calling this
 repeatedly therefore alternates back and forth between the two."
   (interactive)
   (setq smart-bury-counter
-        (if (or (smart-bury--starts-now-p)
+        (if (or (smart-bury--maybe-start-sequence)
                 (smart-bury--is-initial-p))
             2
           (max 2 smart-bury-counter)))
