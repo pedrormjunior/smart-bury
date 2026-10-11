@@ -40,6 +40,11 @@ whenever that variable is set.")
   :type 'boolean
   :group 'smart-bury)
 
+(defun smart-bury--buffer-list nil
+  "Return `buffer-list', scoped to the selected frame when
+`smart-bury-same-frame' is non-nil."
+  (buffer-list (when smart-bury-same-frame (selected-frame))))
+
 (defun smart-bury--starts-now-p nil
   "Check if `last-command' was *not* one of the Smart Bury ones.
 The Smart Bury commands are stored in `smart-bury-commands'.  When
@@ -109,8 +114,7 @@ Also, take, into account the buffer configuration."
                                 (current-buffer)))
       (let ((last-buf (switch-to-buffer
                        (smart-bury--go-through-buffers
-                        (buffer-list (when smart-bury-same-frame
-                                       (selected-frame)))
+                        (smart-bury--buffer-list)
                         'allow-current))))
         (when was-initial
           (setq smart-bury-initial-buffer last-buf))))))
@@ -122,9 +126,7 @@ Also, take, into account the buffer configuration."
             (smart-bury--is-initial-p))
     (setq smart-bury-counter 1))
   (switch-to-buffer
-   (smart-bury--go-through-buffers (cdr (buffer-list
-                                         (when smart-bury-same-frame
-                                           (selected-frame))))))
+   (smart-bury--go-through-buffers (cdr (smart-bury--buffer-list))))
   (when (called-interactively-p 'interactive)
     (message "Smart Bury: buffer %d — %s" smart-bury-counter (buffer-name)))
   (setq smart-bury-counter (1+ smart-bury-counter)))
@@ -143,9 +145,7 @@ repeatedly therefore alternates back and forth between the two."
                 (smart-bury--is-initial-p))
             2
           (max 2 smart-bury-counter)))
-  (smart-bury--go-through-buffers (cdr (buffer-list
-                                        (when smart-bury-same-frame
-                                          (selected-frame)))))
+  (smart-bury--go-through-buffers (cdr (smart-bury--buffer-list)))
   (when (called-interactively-p 'interactive)
     (message "Smart Bury: switched to %s" (buffer-name)))
   (setq smart-bury-counter 2))
