@@ -262,10 +262,10 @@ To turn these messages off:
 
 ## Development
 
-See `IMPROVEMENTS.md` for known open issues, and run the test suite
-with `make test`.  To test interactively in a new Emacs session just
-with *smart bury* loaded, run `make test-interactively`; to compare
-against vanilla Emacs, run `make test-emacs-defaults-interactively`.
+Run the test suite with `make test`.  To test interactively in a new
+Emacs session just with *smart bury* loaded, run `make
+test-interactively`; to compare against vanilla Emacs, run `make
+test-emacs-defaults-interactively`.
 
 ## License
 

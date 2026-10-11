@@ -99,7 +99,7 @@ eligible, not only those starting with \" *\"."
 
 (ert-deftest smart-bury-test-go-through-buffers-skips-dead-buffer ()
   "A killed buffer in a caller-supplied list is skipped instead of
-crashing on its nil `buffer-name' (formerly IMPROVEMENTS.md item 2)."
+crashing on its nil `buffer-name'."
   (smart-bury-test-with-buffers ((dead "sb-dead") (a "sb-a") (b "sb-b"))
     (kill-buffer dead)
     (should (eq (smart-bury--go-through-buffers (list dead a b)) a))))
@@ -132,9 +132,8 @@ around instead of failing to make progress."
   "With zero eligible buffers (e.g. every candidate is already
 displayed in a window and ALLOW-CURRENT is nil), signal a
 `user-error' immediately instead of looping forever.  This is a
-regression test for IMPROVEMENTS.md item 2: an unbounded `while' loop
-used to spin forever chasing a target buffer count it could never
-reach."
+regression test: an unbounded `while' loop used to spin forever
+chasing a target buffer count it could never reach."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
     (switch-to-buffer a)
     (save-window-excursion
@@ -313,9 +312,7 @@ sane buffer."
 
 (ert-deftest smart-bury-test-kill-current-buffer-repeated ()
   "Two immediately-following kills should still each leave us on a
-live, sane buffer. A single-kill repro of IMPROVEMENTS.md item 1
-did not reproduce the original author's suspected bug (see the
-test above); this widens the probe to a repeated-call sequence."
+live, sane buffer."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
     (switch-to-buffer a)
     (smart-bury-test-with-buffer-list (list a b c)
