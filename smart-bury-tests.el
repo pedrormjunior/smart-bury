@@ -91,6 +91,19 @@ killed by BODY itself across a sequence of calls."
   (smart-bury-test-with-buffers ((a "sb-a") (hidden " *sb-hidden*") (b "sb-b"))
     (should (eq (smart-bury--go-through-buffers (list hidden a b)) a))))
 
+(ert-deftest smart-bury-test-go-through-buffers-skips-space-prefixed ()
+  "Any buffer whose name starts with a space is internal and never
+eligible, not only those starting with \" *\"."
+  (smart-bury-test-with-buffers ((a "sb-a") (internal " sb-internal") (b "sb-b"))
+    (should (eq (smart-bury--go-through-buffers (list internal a b)) a))))
+
+(ert-deftest smart-bury-test-go-through-buffers-skips-dead-buffer ()
+  "A killed buffer in a caller-supplied list is skipped instead of
+crashing on its nil `buffer-name' (formerly IMPROVEMENTS.md item 2)."
+  (smart-bury-test-with-buffers ((dead "sb-dead") (a "sb-a") (b "sb-b"))
+    (kill-buffer dead)
+    (should (eq (smart-bury--go-through-buffers (list dead a b)) a))))
+
 (ert-deftest smart-bury-test-go-through-buffers-nth ()
   "With COUNTER = 2, the 2nd eligible buffer is returned, and the
 1st is switched through along the way."

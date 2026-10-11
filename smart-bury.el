@@ -108,6 +108,19 @@ occurred."
   "Check if current buffer is the initial one."
   (eq (current-buffer) smart-bury-initial-buffer))
 
+(defun smart-bury--eligible-p (buffer &optional allow-current)
+  "Return non-nil if BUFFER may be switched to by Smart Bury.
+BUFFER must be live, not a minibuffer, not internal (its name does
+not start with a space), and not displayed in a window of the
+selected frame -- unless ALLOW-CURRENT is non-nil and BUFFER is the
+current buffer."
+  (and (buffer-live-p buffer)
+       (not (minibufferp buffer))
+       (not (string-prefix-p " " (buffer-name buffer)))
+       (or (not (get-buffer-window buffer))
+           (and allow-current
+                (eq buffer (current-buffer))))))
+
 (defun smart-bury--go-through-buffers (buffers &optional allow-current)
   "Go through `smart-bury-counter' buffers of BUFFERS.
 Switch to each of them except the last one, which is returned instead.
@@ -122,12 +135,7 @@ forever chasing a target that can never be reached."
   (cl-assert (>= smart-bury-counter 1))
   (let ((eligible (seq-filter
                    (lambda (buffer)
-                     (and (not (minibufferp buffer))
-                          (or (not (get-buffer-window buffer))
-                              (and allow-current
-                                   (eq buffer (current-buffer))))
-                          (not (string-match-p "^ \\*"
-                                               (buffer-name buffer)))))
+                     (smart-bury--eligible-p buffer allow-current))
                    buffers)))
     (when (null eligible)
       (user-error "Smart Bury: no eligible buffer to switch to"))
