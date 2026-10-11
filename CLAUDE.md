@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Run the test suite: `make test`
   (equivalent to `emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el -f ert-run-tests-batch-and-exit`)
-- Run a single test: `emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el -f ert-run-tests-batch-and-exit --eval "(ert-run-tests-batch-and-exit \"test-name-regexp\")"`,
+- Run a single test: `emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el --eval '(ert-run-tests-batch-and-exit "test-name-regexp")'` (no `-f ert-run-tests-batch-and-exit` here — that would run every test and exit before the `--eval` is reached),
   or interactively via `emacsclient` (see `emacs-skills:emacsclient` — always use `emacsclient`, not `emacs`, for interactive elisp work, byte compilation, or `check-parens`).
 - Try the package interactively, isolated from the user's own init file: `make test-interactively` (loads `smart-bury.el` and `test-interactively.el` under `emacs -Q`; see that file for what it sets up — enabling `smart-bury-mode`/`repeat-mode`, a repeat binding for `smart-bury-kill-current-buffer`, and a few throwaway buffers).
+- Compare against vanilla behavior: `make test-emacs-defaults-interactively` (plain `emacs -Q` plus only a dark theme from `test-emacs-defaults-interactively.el`; does *not* load `smart-bury.el`).
 
 Important: No need to run tests after every modification, mainly if
 they are minor and simple.  Only run tests when a major modification
@@ -34,7 +35,7 @@ Known open issues are tracked in `IMPROVEMENTS.md` (no `buffer-live-p` guard on 
 
 Tests in `smart-bury-tests.el` use several macros: `smart-bury-test-with-buffers` (creates fresh buffers, resets global state, always kills the buffers afterward), `smart-bury-test-with-buffer-list` (stubs `buffer-list` to a fixed set), `smart-bury-test-with-mode` (enables `smart-bury-mode` for the duration, always disabling it afterward), and `smart-bury-test-with-wrapped-commands` (temporarily customizes `smart-bury-wrapped-commands`, always restoring and regenerating the original value afterward). Note that `bury-buffer`/`quit-window` pick their target via the *selected window's* own prev/next-buffer history, not via `buffer-list` — so tests for those commands check the counter/initial-buffer bookkeeping invariant rather than the exact destination buffer. The one test that exercises the real (unstubbed) `buffer-list` MRU reordering — `smart-bury-test-switch-through-then-switch-to-other-returns-to-origin` — exists because a prior refactor of `smart-bury--go-through-buffers` passed every other test while silently breaking that invariant; the stubbed-buffer-list tests can't catch that class of regression.
 
-`test-interactively.el` (run via `make test-interactively`) is a separate, non-ERT file for manually trying the package out in an isolated `emacs -Q` session — not for automated testing.
+`test-interactively.el` (run via `make test-interactively`) and `test-emacs-defaults-interactively.el` are separate, non-ERT files for manual sessions under `emacs -Q` (with and without the package, respectively) — not for automated testing.
 
 ## When committing modifications
 

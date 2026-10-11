@@ -1,4 +1,4 @@
-.PHONY: test test-interactively test-emacs-defaults-interactively-with-smart-bury
+.PHONY: test test-interactively test-emacs-defaults-interactively
 
 test:
 	emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el \
