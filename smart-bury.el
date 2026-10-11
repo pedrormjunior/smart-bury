@@ -110,6 +110,14 @@ Bury command occurred.  Return non-nil if a new sequence started."
   "Check if current buffer is the initial one."
   (eq (current-buffer) smart-bury-initial-buffer))
 
+(defun smart-bury--maybe-restart-sequence nil
+  "Return non-nil if the Smart Bury sequence (re)starts with this call.
+That is the case when `smart-bury--maybe-start-sequence' starts a new
+sequence, or when the user is back on `smart-bury-initial-buffer'
+while continuing one."
+  (or (smart-bury--maybe-start-sequence)
+      (smart-bury--is-initial-p)))
+
 (defun smart-bury--eligible-p (buffer &optional allow-current)
   "Return non-nil if BUFFER may be switched to by Smart Bury.
 BUFFER must be live, not a minibuffer, not internal (its name does
@@ -177,8 +185,7 @@ The first call switches to the other buffer; each immediately
 following call goes one buffer further (3rd, 4th...), without burying
 the buffers on the way."
   (interactive)
-  (when (or (smart-bury--maybe-start-sequence)
-            (smart-bury--is-initial-p))
+  (when (smart-bury--maybe-restart-sequence)
     (setq smart-bury-counter 1))
   (switch-to-buffer
    (smart-bury--go-through-buffers (cdr (smart-bury--buffer-list))))
@@ -196,8 +203,7 @@ the \"other\" buffer, the next most recently used one.  Calling this
 repeatedly therefore alternates back and forth between the two."
   (interactive)
   (setq smart-bury-counter
-        (if (or (smart-bury--maybe-start-sequence)
-                (smart-bury--is-initial-p))
+        (if (smart-bury--maybe-restart-sequence)
             2
           (max 2 smart-bury-counter)))
   (smart-bury--go-through-buffers (cdr (smart-bury--buffer-list)))
