@@ -300,6 +300,165 @@ test above); this widens the probe to a repeated-call sequence."
         (smart-bury-kill-current-buffer))
       (should (buffer-live-p (current-buffer))))))
 
+;;; README Introduction cases
+
+;; Each test below replays one **Case** from the Introduction of
+;; README.md and checks both where we land and the resulting "list of
+;; all buffers".  Like the MRU tests above, they do NOT stub
+;; `buffer-list': the cases are statements about its real ordering.
+
+(defun smart-bury-test--order (buffers)
+  "Make BUFFERS the head of the real `buffer-list', in order, with the
+first one current and displayed in the selected window."
+  (dolist (buffer (reverse buffers))
+    (switch-to-buffer buffer)))
+
+(defun smart-bury-test--names (buffers)
+  "Return the names of BUFFERS in their current `buffer-list' order."
+  (mapcar #'buffer-name
+          (seq-filter (lambda (buffer) (memq buffer buffers))
+                      (buffer-list (selected-frame)))))
+
+(defvar smart-bury-test--previous 'self-insert-command
+  "The command `smart-bury-test--run' last ran, i.e. the
+`last-command' its next call sees.")
+
+(defun smart-bury-test--run (&rest commands)
+  "Call COMMANDS interactively in order, as if typed one after another.
+Each call sees the previous one as `last-command', including across
+successive calls to this function within one
+`smart-bury-test-with-case'.  The symbol `work' stands for any
+non-Smart Bury command (e.g. typing in the buffer), which ends the
+current Smart Bury sequence."
+  (dolist (command commands)
+    (if (eq command 'work)
+        (setq smart-bury-test--previous 'self-insert-command)
+      (let ((last-command smart-bury-test--previous))
+        (call-interactively command))
+      (setq smart-bury-test--previous command))))
+
+(defmacro smart-bury-test-with-case (&rest body)
+  "Run BODY with fresh buffers A, B, C, D, and E bound to `a'...`e',
+ordered so that the \"list of all buffers\" starts `A B C D E', `A'
+being current, and no Smart Bury sequence in progress.  BUFS is bound
+to the list of all five."
+  (declare (indent 0))
+  `(smart-bury-test-with-buffers ((a "A") (b "B") (c "C") (d "D") (e "E"))
+     (let ((bufs (list a b c d e))
+           (smart-bury-test--previous 'self-insert-command))
+       (ignore bufs)
+       (smart-bury-test--order bufs)
+       ,@body)))
+
+(ert-deftest smart-bury-test-readme-case-1 ()
+  "Case 1: `C-x M--' buries `A', focuses `B', and leaves `B C D E A'."
+  (smart-bury-test-with-case
+    (smart-bury-test--run #'smart-bury-bury-buffer)
+    (should (eq (current-buffer) b))
+    (should (equal (smart-bury-test--names bufs) '("B" "C" "D" "E" "A")))))
+
+(ert-deftest smart-bury-test-readme-case-2 ()
+  "Case 2: `C-x _' (or `C-x M-_') goes to `B'; after working there,
+the same key sequence comes back to `A', leaving the list untouched."
+  (dolist (command '(smart-bury-switch-through-buffers
+                     smart-bury-switch-to-other-buffer))
+    (smart-bury-test-with-case
+      (smart-bury-test--run command)
+      (should (eq (current-buffer) b))
+      (smart-bury-test--run 'work command)
+      (should (eq (current-buffer) a))
+      (should (equal (smart-bury-test--names bufs) '("A" "B" "C" "D" "E"))))))
+
+(ert-deftest smart-bury-test-readme-case-3 ()
+  "Case 3: `C-x _' (or `C-x M-_') presents `B' and an immediate `M-_'
+gets back to `A', leaving the list untouched."
+  (dolist (command '(smart-bury-switch-through-buffers
+                     smart-bury-switch-to-other-buffer))
+    (smart-bury-test-with-case
+      (smart-bury-test--run command)
+      (should (eq (current-buffer) b))
+      (smart-bury-test--run #'smart-bury-switch-to-other-buffer)
+      (should (eq (current-buffer) a))
+      (should (equal (smart-bury-test--names bufs) '("A" "B" "C" "D" "E"))))))
+
+(ert-deftest smart-bury-test-readme-case-4 ()
+  "Case 4: `C-x _ _' reaches `C', `M-_' gets back to `A' with the list
+untouched; then a new `C-x _' (or a continuing `_', `C-x M-_', or
+`M-_') gets to `B'."
+  (dolist (next '((work smart-bury-switch-through-buffers)
+                  (smart-bury-switch-through-buffers)
+                  (work smart-bury-switch-to-other-buffer)
+                  (smart-bury-switch-to-other-buffer)))
+    (smart-bury-test-with-case
+      (smart-bury-test--run #'smart-bury-switch-through-buffers
+                            #'smart-bury-switch-through-buffers)
+      (should (eq (current-buffer) c))
+      (smart-bury-test--run #'smart-bury-switch-to-other-buffer)
+      (should (eq (current-buffer) a))
+      (should (equal (smart-bury-test--names bufs) '("A" "B" "C" "D" "E")))
+      (apply #'smart-bury-test--run next)
+      (should (eq (current-buffer) b)))))
+
+(ert-deftest smart-bury-test-readme-case-5 ()
+  "Case 5: `C-x _ M--' buries `B' on the way to `C', and `M-_' gets
+back to `A', leaving `A C D E B'.  After working on `A', repeating
+with `C-x _' then `M-_' keeps that same list."
+  (smart-bury-test-with-case
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          #'smart-bury-bury-buffer)
+    (should (eq (current-buffer) c))
+    (smart-bury-test--run #'smart-bury-switch-to-other-buffer)
+    (should (eq (current-buffer) a))
+    (should (equal (smart-bury-test--names bufs) '("A" "C" "D" "E" "B")))
+    (smart-bury-test--run 'work #'smart-bury-switch-through-buffers)
+    (should (eq (current-buffer) c))
+    (smart-bury-test--run #'smart-bury-switch-to-other-buffer)
+    (should (eq (current-buffer) a))
+    (should (equal (smart-bury-test--names bufs) '("A" "C" "D" "E" "B")))))
+
+(ert-deftest smart-bury-test-readme-case-6 ()
+  "Case 6: with work in between, `C-x _ _' three times cycles
+`A' -> `C' -> `B' -> `A', restoring the original list; without work in
+between, `C-x _ _' twice is `C-x _ _ _ _', reaching `E'."
+  (smart-bury-test-with-case
+    (dolist (expected (list c b a))
+      (smart-bury-test--run 'work
+                            #'smart-bury-switch-through-buffers
+                            #'smart-bury-switch-through-buffers)
+      (should (eq (current-buffer) expected)))
+    (should (equal (smart-bury-test--names bufs) '("A" "B" "C" "D" "E"))))
+  (smart-bury-test-with-case
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers)
+    (should (eq (current-buffer) e))))
+
+(ert-deftest smart-bury-test-readme-case-7 ()
+  "Case 7: `q _' from `A' (where `q' is `quit-window', remapped)
+quits `A' and reaches `C', leaving `C B D E A'."
+  (smart-bury-test-with-case
+    (smart-bury-test--run #'smart-bury-quit-window
+                          #'smart-bury-switch-through-buffers)
+    (should (eq (current-buffer) c))
+    (should (equal (smart-bury-test--names bufs) '("C" "B" "D" "E" "A")))))
+
+(ert-deftest smart-bury-test-readme-why-smart ()
+  "\"Why is it smart?\": going to `B' and immediately burying it
+reaches `C', not `A'; but after working on `B', burying it gets back
+to `A', and an immediate `_' then reaches `C'."
+  (smart-bury-test-with-case
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          #'smart-bury-bury-buffer)
+    (should (eq (current-buffer) c)))
+  (smart-bury-test-with-case
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          'work
+                          #'smart-bury-bury-buffer)
+    (should (eq (current-buffer) a))
+    (smart-bury-test--run #'smart-bury-switch-through-buffers)
+    (should (eq (current-buffer) c))))
+
 ;;; `smart-bury-mode'
 
 (ert-deftest smart-bury-test-mode-binds-switch-commands ()

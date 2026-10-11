@@ -1,177 +1,263 @@
 # Smart Bury
 
-The idea behind Smart Bury is in its name: *bury*, not banish. Getting
-a buffer out of the way need not mean losing track of it — it should
-remain one keystroke away, simply no longer in front. That is a
-different mindset from "close" or "discard": the buffer is not
-finished with, only no longer in focus *right now*. Smart Bury has no
-notion of which buffer is actually wanted next — that choice stays
-with whoever is pressing the key — it only makes repeated presses of
-the same key land somewhere deliberate, instead of wherever Emacs's
-own internal bookkeeping happens to produce.
+Smart Bury makes switching buffers in a window a matter of a few
+repeated key presses: bury, quit, or kill the current buffer, or go
+through the most recently used buffers, without typing any buffer
+name.  It is “smart” in the sense that if we go from `A` to `B` and
+immediately bury `B`, it takes us straight to `C` instead of coming
+back to `A` — `B` was simply on the way (see [Why is it
+“smart”?](#why-is-it-smart)).
 
-Smart Bury wraps `bury-buffer`, `quit-window`, and
-`kill-current-buffer` — and adds two buffer-switching commands of its
-own — so that a *sequence* of presses walks through recently-used
-buffers, one per press, cycling back around once it runs out. Once
-the sequence is interrupted by some other command, the next press
-starts a fresh sequence from wherever focus happens to be.
+## Motivation
 
-Consider three buffers — A, B, and C — in active use, shown one at a
-time in a single window with no split needed. Switching to whichever
-of the other two was used most recently costs nothing: `C-x b RET`
-already defaults to it. Reaching the third one does not: Emacs offers
-only that one default target, so getting to the other one means
-typing its name in full. Repeated plain `bury-buffer` presses do not
-reliably help either, since each one's target is simply whatever that
-window's own history happens to contain, not a deliberate choice.
+The interactive function `bury-buffer` comes with Emacs but is not
+bound to any key by default.  Function `(bury-buffer &optional
+BUFFER-OR-NAME)`, as its documentation says, will basically “Put
+BUFFER-OR-NAME at the end of the list of all buffers.”  When called
+interactively, it buries the *current buffer*.
 
-Starting in A, switching to B costs nothing, as above. Done with B,
-and really wanting C, burying it with plain `bury-buffer` returns to
-A — not C, since A is only what that window showed right before B.
-`smart-bury-bury-buffer` behaves the same way on this first press,
-also landing on A; but burying again, continuing the same sequence,
-reaches C directly — without a buffer name ever being typed.
+The function `switch-to-buffer` is bound to `C-x b` by default:
+interactively, it basically asks for the buffer we want to switch to,
+offering as default the “most recently selected buffer other than” the
+*current* buffer, i.e., the one returned by an `(other-buffer)` call.
+(Quoted from the documentation of the non-interactive `other-buffer`.)
 
-`smart-bury-switch-through-buffers` has no equivalent among the
-vanilla commands at all, and is useful well beyond that one case.
-Starting in A and heading for C, with B expected to be useful again
-shortly, two presses reach C directly. After working there, two more
-presses lead back toward B — the first already passing through A,
-which is never out of reach even while attention is elsewhere.
+If we want to switch to a third, fourth, or further buffer, by default
+we would type the name of the buffer, use `<TAB>` to autocomplete it,
+and then press `<RET>` to give focus to the intended buffer…
 
-Pressing the same key repeatedly like this is, in fact, the whole
-point, which is why
-[Repeating with `repeat-mode`](#repeating-with-repeat-mode) below
-matters: each pair of presses above — the two that reach C, and
-later the two that head back toward B — reduces to one chord (`C-x
-_`) followed by a single tap of the last key, with work on C in
-between resetting the count, as it should. Everything here assumes
-one window showing one buffer at a time for simplicity, but the same
-mechanism applies unchanged with buffers split across several windows
-instead.
+## Overview
 
-## Commands
+Without loss of generality, let’s assume we’re on a single *frame*, a
+single *window*, and consequently a single *buffer*.  From that
+window, we want to switch to another buffer.  That’s what this package
+handles.  It provides *three basic functions* and it is preconfigured
+to “smartly” handle *two others* when switching buffers in a window.
+(This list of two is customizable and extensible; see [Wrapping other
+commands](#wrapping-other-commands).)
 
-- `smart-bury-bury-buffer` — like `bury-buffer`, but smart.
-- `smart-bury-quit-window` — like `quit-window`, but smart. Generated
-  from `smart-bury-wrapped-commands` (see below), not hand-written.
-- `smart-bury-kill-current-buffer` — like `kill-current-buffer`, but
-  smart (also generated; see below).
-- `smart-bury-switch-through-buffers` — cumulatively switch to the
-  next recently-used buffer on every press (no underlying Emacs
-  command — this one is specific to Smart Bury).
-- `smart-bury-switch-to-other-buffer` — switches to the buffer the current
-  sequence started from. If already back on that buffer, switches
-  instead to the "other" (next most recently used) buffer, so
-  pressing it repeatedly toggles back and forth between the two (also
-  specific to Smart Bury).
+The three basic (interactive) functions are:
+- `smart-bury-bury-buffer` — like `bury-buffer`, but “smart” (see why
+  below).
+- `smart-bury-switch-through-buffers` — equivalent to a
+  `(switch-to-buffer (other-buffer))` call on *first call*, but goes
+  on to the 3rd, 4th… buffer on successive immediate calls, *without
+  actually burying buffers* so that after those calls we end up on the
+  intended buffer; that buffer becomes the *current buffer*, the
+  origin buffer becomes the *other buffer*, and the remaining buffers
+  keep their relative positions.  That is, if the target buffer was
+  the i-th, it becomes the 1st (*current*), the j-th buffer, for j <
+  i, moves to the (j+1)-th position, and the j-th buffer, for j > i,
+  keeps the same position it had in the “list of all buffers”.
+- `smart-bury-switch-to-other-buffer` — also equivalent to a
+  `(switch-to-buffer (other-buffer))` call on *first call*, as well as
+  on *remaining calls*: it keeps switching back and forth between the
+  current buffer and the *other buffer*.  As *switching through
+  buffers* (previously described function) always keeps buffers in
+  positions (more or less) relative to their initial positions and the
+  origin buffer as the *other buffer*, a call to this function after
+  successive and immediate calls to the previously described function
+  will return the focus to the original buffer, keeping the “list of
+  all buffers” as it was before starting *switching through buffers*.
 
-## Configuration
+The two other functions, handled by default, are `quit-window` and
+`kill-current-buffer`: `smart-bury-mode` remaps them to
+`smart-bury-quit-window` and `smart-bury-kill-current-buffer`, which
+take part in the same “smart” sequences.
 
-Smart Bury doesn't bind any keys itself by default, but it ships a
-global minor mode, `smart-bury-mode`, that does: enable it and the
-vanilla commands (`bury-buffer`, `quit-window`,
-`kill-current-buffer`) are remapped to their Smart Bury equivalents
-everywhere, plus `C-x _` and `C-x M-_` are bound to
-`smart-bury-switch-through-buffers` and
-`smart-bury-switch-to-other-buffer`:
+## Setup
+
+Smart Bury requires Emacs 27.1 or later.  With `smart-bury.el` in a
+directory on `load-path`, enable the mode and, as recommended,
+`repeat-mode`:
 
 ```elisp
 (use-package smart-bury
-  :config (smart-bury-mode 1))
+  :load-path "/path/to/smart-bury"
+  :config
+  (smart-bury-mode 1)
+  (repeat-mode 1))
 ```
 
-See `smart-bury-mode-map` for the exact bindings; `define-key` into
-it (before or after enabling the mode) to change any of them.
+`smart-bury-mode` binds the keys `C-x M--`, `C-x _`, and `C-x M-_` to
+the three basic functions, respectively, and remaps the wrapped ones
+(see [Keys](#keys) to change them).
 
-If you'd rather not use the mode — e.g. to pick your own keys
-instead of its defaults — remap the vanilla commands to their Smart
-Bury equivalents yourself, so your existing muscle memory (and any
-third-party keybindings) keeps working, just smarter:
+**Note:** the mode’s default keys are **not** bound in vanilla Emacs.
+
+With `repeat-mode` enabled, any call to any of the three functions
+bound with the `C-x` prefix can simply be followed by `M--`, `_`, or
+`M-_`, respectively.  The same holds after an interactive call to any
+of the wrapped functions (e.g., `q` in a read-only buffer, if it is
+bound to `quit-window`): it also enables the *repeat map*, so
+*switching through buffers* can be done with fewer key presses.
+
+We recommend reading the examples below before trying it out, to get
+a sense of how it is meant to be used.
+
+## Usage by example
+
+We’ll assume the default keybindings and *repeat mode* throughout this
+section.  In each **case** below, let’s consider the initial “list of
+all buffers” is `A B C … X Y Z`, which implies the *current buffer* is
+`A` and the *other buffer* is `B`.
+
+**Case 1:** We’re done with `A` and we no longer want to see it in any
+window for a while, unless we explicitly search for it (e.g., with
+`C-x b`).  `C-x M--` suffices: it gives focus to `B` and leaves the
+“list of all buffers” as `B C D … Y Z A`.
+
+**Case 2:** We want to go to `B` to write some lines (but we’ll come
+back to `A` afterwards); either `C-x _` or `C-x M-_` does that.  After
+typing anything else in `B` (important; see **case 6**), to come back
+to `A`, either key sequence does the job as well.  Final “list of all
+buffers”: `A B C … X Y Z`.
+
+**Case 3:** We just want to read something in `B` and then come back
+to work on `A`: `C-x _` (or `C-x M-_`) will present `B` and `M-_` (or
+`C-x M-_`) will get us back to `A`.  Final “list of all buffers”: `A B
+C … X Y Z`.
+
+**Case 4:** Similar to **Case 3**, but we want to read something in
+`C`: `C-x _ _`, read, and `M-_` to be back on `A`.  Final “list of all
+buffers”: `A B C … X Y Z`.  A new `C-x _` (or simply `_` if no
+non-*smart-bury* command was called in the meantime; or `C-x M-_` or
+`M-_` as well) will get us to `B`.
+
+**Case 5:** Similar to **Case 4**, but `B` is on the way and no longer
+needed: `C-x _ M--`, read in `C`, and `M-_` to be back on `A`, so that
+`C` becomes the *other buffer* and the “list of all buffers” becomes
+`A C D … Y Z B`.  After working on `A`, to do the same again, `C-x _`,
+read in `C`, and `M-_` suffice to be back on `A` and the “list of all
+buffers” will be the same.
+
+**Case 6:** Working on three buffers cyclically, i.e., from initial
+`A`, `C-x _ _` gets us to `C`, work on `C` (important), `C-x _ _` gets
+us to `B`, work on `B` (important), `C-x _ _` gets us back to `A`,
+work on `A` (important), and so on to cycle.  After ending up on `A`,
+the “list of all buffers” is as the original.  Here, “work” is marked
+as “important” because `C-x _ _` followed by `C-x _ _` with no
+intermediate non-*smart-bury* command is equivalent to `C-x _ _ _ _`,
+which would get us to `E`.
+
+**Case 7:** `A` is the `*Messages*` buffer.  To quit it and go to `C`,
+`q _` suffices.  The final “list of all buffers” is then `C B D … Y Z
+A`.
+
+### Why is it “smart”?
+
+It is smart in the sense that if we are on buffer `A`, go to `B`, and
+immediately bury `B`, it takes us straight to `C` instead of coming
+back to `A`.  We rarely want to go to `B` just to bury it and come
+back to where we were: usually `B` is simply on the way to another
+buffer.  But if we stop and work on `B` and later bury it, then we go
+back to `A` as normal; and if `C` is intended instead, one extra `_`
+suffices to get us there.
+
+## Customization
+
+The options below must be set with `setopt` (Emacs 29+),
+`customize-set-variable`, or `M-x customize-variable` — **not** with a
+plain `setq`, which skips the regeneration they trigger.
+
+### Keys
+
+The prefix `C-x` is configured in `smart-bury-prefix-key`, and the
+three keys following it in `smart-bury-keys`.  Each of those keys must
+be a single key, since it is also the key repeating its function under
+*repeat mode*.  For example, to use `C-c` with `b`, `n`, and `o`:
 
 ```elisp
-(use-package smart-bury
-  :bind (([remap bury-buffer]          . smart-bury-bury-buffer)
-         ([remap quit-window]          . smart-bury-quit-window)
-         ([remap kill-current-buffer]  . smart-bury-kill-current-buffer)
-         ("C-x M--" . bury-buffer)
-         ("C-x _" . smart-bury-switch-through-buffers)
-         ("C-x M-_" . smart-bury-switch-to-other-buffer)))
+(setopt smart-bury-prefix-key "C-c")
+(setopt smart-bury-keys
+        '((smart-bury-bury-buffer            . "b")
+          (smart-bury-switch-through-buffers . "n")
+          (smart-bury-switch-to-other-buffer . "o")))
 ```
 
-(`smart-bury-switch-through-buffers` and
-`smart-bury-switch-to-other-buffer` have no vanilla command to remap
-from, so pick whatever keys suit you.  Aligned to the recommendation
-inhere, we suggest binding `bury-buffer` to `C-x -`.)
+The prefix may also be the empty string, to bind the keys directly
+(e.g., `<f5>`, `<f6>`, and `<f7>`).
 
 ### Wrapping other commands
 
 `smart-bury-quit-window` and `smart-bury-kill-current-buffer` aren't
 hand-written — they're generated from `smart-bury-wrapped-commands`
 (default: `(quit-window kill-current-buffer)`), each entry FN getting
-a `smart-bury-FN` command that calls FN via the same cycling
-machinery as `smart-bury-bury-buffer`, reusing FN's own `interactive`
-spec. (`smart-bury-bury-buffer` itself is defined separately, since
-it alone has a fixed default keybinding, `C-x M--`, in
-`smart-bury-mode-map`.)
+a `smart-bury-FN` command that calls FN via the same cycling machinery
+as `smart-bury-bury-buffer`, reusing FN's own `interactive` spec.
+(`smart-bury-bury-buffer` itself is defined separately, as one of the
+three basic functions configured through `smart-bury-keys`.)
 
-Setting this variable — via `setopt` or `M-x customize-variable` —
-regenerates the wrapper commands immediately, and keeps
-`smart-bury-commands`, `smart-bury-mode-map`'s remaps, and
-`smart-bury-repeat-map`'s properties in sync. For example, to drop
-`kill-current-buffer` entirely and instead wrap `View-quit`:
+Setting this variable regenerates the wrapper commands immediately,
+and keeps the mode’s remaps and each wrapper’s `repeat-map` property
+in sync.  For example, to drop `kill-current-buffer` entirely and
+instead wrap `View-quit`:
 
 ```elisp
 (setopt smart-bury-wrapped-commands '(quit-window View-quit))
 ```
 
-### Repeating with `repeat-mode`
+Here is a non-exhaustive list of functions that can be added to
+`smart-bury-wrapped-commands`: `magit-mode-bury-buffer`,
+`magit-blame-quit` ([Magit](https://magit.vc)), `ebib-quit`
+([Ebib](https://joostkremers.github.io/ebib/)), `mu4e-quit`
+([mu4e](https://www.djcbsoftware.nl/code/mu/)), `Custom-buffer-done`,
+`kill-buffer`, `switch-to-buffer` (built in)…
 
-All five Smart Bury commands declare a `repeat-map`, so if you already
-have Emacs's built-in `repeat-mode` turned on, invoking one of them
-lets you repeat it with just a single key afterward instead of
-retyping the whole chord — e.g. after `C-x _`, pressing `_` again
-keeps cycling. `smart-bury-mode` does not enable `repeat-mode` itself
-(it's an independent, global setting unrelated to Smart Bury's own
-purpose); turn it on yourself if you want this (recommended):
+### Repeat map
+
+`smart-bury-repeat-map` can be extended so that, when the *repeat map*
+is enabled, we can easily call certain functions with a single key
+press.  For instance, the following allows us to easily kill many
+buffers we find on the way to the intended buffer:
 
 ```elisp
-(repeat-mode 1)
+(define-key smart-bury-repeat-map (kbd "M-Q")
+            #'smart-bury-kill-current-buffer)
 ```
 
-Smart Bury also sets `repeat-check-key` to `no`, so the repeat-map
-arms regardless of *which key actually invoked the command* — not just
-its default binding. This matters most for `smart-bury-quit-window`
-and `smart-bury-kill-current-buffer`: they only reach the user via a
-remap of whatever key `quit-window`/`kill-current-buffer` are bound to
-(e.g. `q` in many read-only modes), so there's no fixed key of their
-own to require. With the check relaxed, even invoking one of those
-through such a mode-local `q` arms the map — meaning, for instance,
-that after `q` is pressed in a certain read-only mode, the user is
-ready to navigate through the buffers in repeat-mode.
+This requires `kill-current-buffer` to be in
+`smart-bury-wrapped-commands` (it is by default).  Bindings added to
+`smart-bury-repeat-map` or `smart-bury-mode-map` this way are
+preserved when any of the options above is customized later.
 
-If one prefers to disable this behavior, it is enough to `(put
-'smart-bury-<function> 'repeat-check-key t)`.
+*Smart Bury* also sets `repeat-check-key` to `no` for its functions,
+so the *repeat map* arms regardless of *which key actually invoked the
+command* — not just its default binding.  This matters most for
+`smart-bury-quit-window` and `smart-bury-kill-current-buffer`: they
+only reach the user via a remap of whatever key
+`quit-window`/`kill-current-buffer` are bound to (e.g. `q` in many
+read-only modes), so there's no fixed key of their own to require.
+With the check relaxed, even invoking one of those through such a
+mode-local `q` arms the map — meaning, for instance, that after `q` is
+pressed in a certain read-only mode, we’re is ready to navigate
+through the buffers in *repeat mode*.
 
-Neither `smart-bury-quit-window` nor `smart-bury-kill-current-buffer`
-has a default key of its own in `smart-bury-repeat-map` (unlike the
-other three) — add one yourself, using whichever key you actually
-invoke it with, e.g. for a `kill-current-buffer` bound to `M-Q`:
+If one prefers to disable this behavior for a function:
 
 ```elisp
-(define-key smart-bury-repeat-map (kbd "M-Q") #'smart-bury-kill-current-buffer)
+(put 'smart-bury-<function> 'repeat-check-key t)
 ```
 
-By default, Smart Bury only considers buffers from the current
-frame. To consider recently-used buffers across all frames instead,
-customize `smart-bury-same-frame`:
+### Frames
+
+By default, *smart bury* only considers buffers from the current
+frame.  To consider recently-used buffers across all frames instead,
+customize `smart-bury-same-frame`, e.g.:
 
 ```elisp
-(setq smart-bury-same-frame nil)
+(setopt smart-bury-same-frame nil)
 ```
 
 ## Development
 
 See `IMPROVEMENTS.md` for known open issues, and run the test suite
-with `make test`.
+with `make test`.  To test interactively in a new Emacs session just
+with *smart bury* loaded, run `make test-interactively`; to compare
+against vanilla Emacs, run `make test-emacs-defaults-interactively`.
+
+## License
+
+Smart Bury is free software, licensed under the GNU General Public
+License, version 3 or (at your option) any later version.  See
+[`LICENSE`](LICENSE) for the full text.

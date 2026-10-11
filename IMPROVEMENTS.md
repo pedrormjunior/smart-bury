@@ -19,8 +19,3 @@
    reports dead buffers), but the function has no defense if it's
    ever called with a caller-supplied list containing one — as
    happened while testing.
-3. **License header**: the file currently has no license notice at
-   all, which is a blocker for any public distribution (MELPA
-   requires one). GPL-3.0-or-later is the conventional choice for
-   packages that extend core Emacs behavior; needs the standard
-   FSF-style boilerplate comment block at the top of the file.

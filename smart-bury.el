@@ -1,16 +1,62 @@
 ;;; smart-bury.el --- Smartly bury, quit, and kill buffers -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 Pedro Ribeiro Mendes Júnior
+
 ;; Author: Pedro Ribeiro Mendes Júnior <pedrormjunior@gmail.com>
 ;; Keywords: convenience
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "27.1"))
 ;; URL: https://github.com/pedrormjunior/smart-bury
 
+;; This file is not part of GNU Emacs.
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or (at
+;; your option) any later version.
+
+;; This program is distributed in the hope that it will be useful, but
+;; WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+;; General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see
+;; <https://www.gnu.org/licenses/>.
+
 ;;; Commentary:
 
-;; This file was extracted verbatim from a personal Emacs
-;; configuration.  No functional changes were made during the
-;; extraction.
+;; Smart Bury makes switching buffers in a window a matter of a few
+;; repeated key presses: bury, quit, or kill the current buffer, or go
+;; through the most recently used buffers, without typing any buffer
+;; name.  It is "smart" in the sense that if we go from buffer A to B
+;; and immediately bury B, it takes us straight to C instead of coming
+;; back to A -- B was simply on the way.
+;;
+;; It provides three basic commands:
+;;
+;; - `smart-bury-bury-buffer': like `bury-buffer', but "smart".
+;; - `smart-bury-switch-through-buffers': switch to the other buffer,
+;;   then to the 3rd, 4th... on successive calls, keeping the relative
+;;   order of the remaining buffers.
+;; - `smart-bury-switch-to-other-buffer': switch back and forth between
+;;   the current and the other buffer; after switching through buffers,
+;;   it returns to the original one.
+;;
+;; It also generates a `smart-bury-FN' wrapper for each command FN in
+;; `smart-bury-wrapped-commands' (by default `quit-window' and
+;; `kill-current-buffer'), which takes part in the same sequences.
+;;
+;; To use it, enable `smart-bury-mode', and preferably `repeat-mode':
+;;
+;;   (smart-bury-mode 1)
+;;   (repeat-mode 1)
+;;
+;; The mode binds `C-x M--', `C-x _', and `C-x M-_' to the three basic
+;; commands and remaps the wrapped ones.  With `repeat-mode', each
+;; command can then be repeated with just `M--', `_', or `M-_'.  See
+;; `smart-bury-prefix-key' and `smart-bury-keys' to change the keys, and
+;; README.md for full description and examples.
 
 ;;; Code:
 
