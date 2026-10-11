@@ -152,14 +152,17 @@ there are no eligible buffers at all."
 Unless this call starts a fresh Smart Bury sequence, switch through
 `smart-bury-counter' buffers afterward, keeping
 `smart-bury-initial-buffer' in sync with where the sequence lands."
-  (let ((starts-now (smart-bury--starts-now-p))
-        (was-initial (smart-bury--is-initial-p)))
+  ;; `let*': `smart-bury--starts-now-p' must run first, since on a
+  ;; fresh sequence it sets `smart-bury-initial-buffer' to the current
+  ;; buffer, which WAS-INITIAL then sees (so it is always non-nil when
+  ;; STARTS-NOW is).
+  (let* ((starts-now (smart-bury--starts-now-p))
+         (was-initial (smart-bury--is-initial-p)))
     (apply func r)
     (when was-initial
       (setq smart-bury-counter 1))
     (if starts-now
-        (when was-initial (setq smart-bury-initial-buffer
-                                (current-buffer)))
+        (setq smart-bury-initial-buffer (current-buffer))
       (let ((last-buf (switch-to-buffer
                        (smart-bury--go-through-buffers
                         (smart-bury--buffer-list)
