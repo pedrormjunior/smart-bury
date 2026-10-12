@@ -190,10 +190,14 @@ class SmartBuryDemo(Scene):
         return VGroup(title, self.keys_box, self.keys_text)
 
     def keys_label(self, keys: str) -> Text:
-        label = Text(keys or " ", font=MONO, font_size=30, color=WHITE)
+        # An empty label is an invisible placeholder glyph rather than
+        # Text(" "): a space has no points, so transforming from it starts
+        # from a stray point outside the box (a one-frame dot).
+        label = Text(keys or "_", font=MONO, font_size=30, color=WHITE)
         if label.width > self.keys_box.width - 0.4:
             label.scale_to_fit_width(self.keys_box.width - 0.4)
-        return label.move_to(self.keys_box)
+        label.move_to(self.keys_box)
+        return label if keys else label.set_opacity(0)
 
     def build_state(self) -> VGroup:
         title = Text("Smart Bury state", font_size=22, color=GRAY_B)
@@ -259,15 +263,16 @@ class SmartBuryDemo(Scene):
         self.play(Transform(self.keys_text, self.keys_label(keys)),
                   run_time=0.4)
 
-    def press(self, keys: str, action, caption: str = "",
-              wait: float = 1.6) -> None:
+    def press(self, keys: str, action, caption: str = "") -> None:
         """Press KEYS, run ACTION on the model, and animate the result.
 
         KEYS continue the key sequence on display unless the previous
         command was not a Smart Bury one, in which case they start it.
+        The caption shows first, with a pause to read it before the
+        motion; the wait afterward grows with the caption's length.
         """
         if caption:
-            self.say(caption, wait=0)
+            self.say(caption, wait=0.8)
         old = list(self.sim.blist)
         if self.sim.last_command == WORK:
             self.key_sequence = []
@@ -287,7 +292,7 @@ class SmartBuryDemo(Scene):
             self.initial_marker_target(step.initial, new, visible=True),
         ]
         self.play(*animations, run_time=1.2)
-        self.wait(wait)
+        self.wait(max(1.2, 0.18 * len(caption.split())))
 
     def work(self, caption: str) -> None:
         """Any other command (e.g. typing), which ends the sequence."""
