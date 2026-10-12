@@ -3,6 +3,8 @@
 ;; Copyright (C) 2026 Pedro Ribeiro Mendes Júnior
 
 ;; Author: Pedro Ribeiro Mendes Júnior <pedrormjunior@gmail.com>
+;; Assisted-by: Claude:claude-opus-5-5
+;; Assisted-by: Claude:claude-sonnet-5
 ;; Keywords: convenience
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "27.1"))
