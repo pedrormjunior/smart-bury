@@ -275,9 +275,10 @@ class SmartBuryIntro(Scene):
             new.scale_to_fit_width(13)
         new.move_to(UP * CAPTION_Y)
         if self.caption is None:
-            self.play(FadeIn(new, shift=UP * 0.15))
+            self.play(FadeIn(new, shift=UP * 0.15), run_time=0.5)
         else:
-            self.play(FadeOut(self.caption), FadeIn(new, shift=UP * 0.15))
+            self.play(FadeOut(self.caption), FadeIn(new, shift=UP * 0.15),
+                      run_time=0.5)
         self.caption = new
         if wait > 0:
             self.wait(wait)
@@ -353,19 +354,19 @@ class SmartBuryIntro(Scene):
         EXPECT, if given, is the buffer order the storyboard expects.
         """
         if caption:
-            self.say(caption, wait=0.3 if fast else 0.8)
+            self.say(caption, wait=0.25 if fast else 0.5)
         if (keys.startswith("C-x")
                 or self.sim.last_command not in SMART_COMMANDS):
             self.key_sequence = []
         self.key_sequence.append(keys)
-        self.show_keys(run_time=0.25 if fast else 0.4)
+        self.show_keys(run_time=0.2 if fast else 0.35)
         old = list(self.sim.blist)
         action()
         if expect is not None:
             self.expect(expect, keys)
         self.update_stage(old, self.repeat_message(),
-                          run_time=0.7 if fast else 1.2)
-        self.wait(0.5 if fast else max(1.2, 0.18 * len(caption.split())))
+                          run_time=0.55 if fast else 1.0)
+        self.wait(0.35 if fast else max(1.0, 0.15 * len(caption.split())))
 
     def work(self, caption: str, expect: str | None = None) -> None:
         """Any other command (e.g. typing), which ends the sequence and
@@ -382,9 +383,9 @@ class SmartBuryIntro(Scene):
                       Transform(self.minibuffer, self.minibuffer_label())]
         if self.state_visible:
             animations.append(self.initial_marker.animate.set_opacity(0))
-        self.play(*animations)
-        self.wait(1)
-        self.show_keys()
+        self.play(*animations, run_time=0.8)
+        self.wait(0.7)
+        self.show_keys(run_time=0.3)
 
     def switch_to_buffer(self, name: str, caption: str = "",
                          expect: str | None = None,
@@ -395,31 +396,31 @@ class SmartBuryIntro(Scene):
         typed: C-x b RET.
         """
         if caption:
-            self.say(caption, wait=0.3 if fast else 0.8)
+            self.say(caption, wait=0.25 if fast else 0.5)
         default = self.sim.other
         prompt = f"Switch to buffer (default {default}): "
         self.key_sequence = ["C-x b"]
         self.play(Transform(self.keys_text, self.keys_label("C-x b")),
                   Transform(self.minibuffer, self.minibuffer_label(prompt)),
-                  run_time=0.3 if fast else 0.5)
-        self.wait(0.2 if fast else 0.6)
+                  run_time=0.3 if fast else 0.45)
+        self.wait(0.2 if fast else 0.45)
         if name != default:
             self.key_sequence.append(name)
             self.play(Transform(self.keys_text,
                                 self.keys_label(f"C-x b {name}")),
                       Transform(self.minibuffer,
                                 self.minibuffer_label(prompt, name)),
-                      run_time=0.25 if fast else 0.4)
-            self.wait(0.2 if fast else 0.5)
+                      run_time=0.25 if fast else 0.35)
+            self.wait(0.2 if fast else 0.35)
         self.key_sequence.append("RET")
-        self.show_keys(run_time=0.25 if fast else 0.4)
+        self.show_keys(run_time=0.2 if fast else 0.3)
         old = list(self.sim.blist)
         self.sim.switch_to_buffer(name)
         if expect is not None:
             self.expect(expect, f"C-x b {name} RET")
         self.update_stage(old, self.minibuffer_label(),
-                          run_time=0.7 if fast else 1.2)
-        self.wait(0.5 if fast else 1.2)
+                          run_time=0.55 if fast else 1.0)
+        self.wait(0.35 if fast else 1.0)
 
     # Cards
     # Cards
@@ -482,7 +483,7 @@ class SmartBuryIntro(Scene):
         footer = VGroup(Text("With repeat-mode, continue with just "
                              "M--, _, or M-_.", font_size=24, color=GRAY_B))
         footer.move_to(DOWN * 2.9)
-        self.show_card(heading, rows, footer, hold=4)
+        self.show_card(heading, rows, footer, hold=3.5)
 
     def wrapped_row(self, vanilla: str, wrapper: str, note: str) -> VGroup:
         arrow = Text("→", font_size=28, color=GRAY_B)
@@ -509,7 +510,7 @@ class SmartBuryIntro(Scene):
             Text("The list is customizable: smart-bury-wrapped-commands.",
                  font_size=22, color=GRAY_B),
         ).arrange(DOWN, buff=0.25).move_to(DOWN * 2.3)
-        self.show_card(heading, rows, footer, hold=3.5)
+        self.show_card(heading, rows, footer, hold=3)
 
     # The session
 
@@ -526,13 +527,13 @@ class SmartBuryIntro(Scene):
                                    for name in self.sim.blist),
                                  lag_ratio=0.15),
                   FadeIn(self.list_labels))
-        self.wait(1)
+        self.wait(0.8)
 
         self.say("The first is the current buffer; "
                  "the second is the other buffer.", wait=0)
         self.play(Create(self.current_frame), FadeIn(self.current_label))
         self.play(Create(self.other_frame), FadeIn(self.other_label))
-        self.wait(1.5)
+        self.wait(1.2)
 
         self.say("The window shows the current buffer; "
                  "the minibuffer sits below it.", wait=0)
@@ -544,7 +545,7 @@ class SmartBuryIntro(Scene):
                   Create(self.window_body, lag_ratio=0.2),
                   FadeIn(minibuffer_hint))
         self.add(self.minibuffer)
-        self.wait(1.5)
+        self.wait(1.2)
         self.play(FadeOut(minibuffer_hint))
 
         self.say("Keys pressed appear on the right.", wait=0)
@@ -553,7 +554,7 @@ class SmartBuryIntro(Scene):
 
     def vanilla_way(self) -> None:
         self.say("Without Smart Bury, going to a third buffer means "
-                 "typing its name.", wait=1)
+                 "typing its name.", wait=0.8)
         self.switch_to_buffer("C", "C-x b offers the other buffer, B, "
                               "by default; we type C instead.",
                               expect="CABDE")
@@ -563,7 +564,7 @@ class SmartBuryIntro(Scene):
         self.say("…leaves C ahead of B: the list got shuffled.", wait=0)
         self.play(Indicate(self.boxes["C"], color=WHITE),
                   Indicate(self.boxes["B"], color=WHITE), run_time=1.2)
-        self.wait(1)
+        self.wait(0.6)
         self.switch_to_buffer("B", "Putting it back takes more typing.",
                               expect="BACDE", fast=True)
         self.switch_to_buffer("A", expect="ABCDE", fast=True)
@@ -575,7 +576,7 @@ class SmartBuryIntro(Scene):
                    "C-x M-- buries A: it goes to the end of the list, "
                    "and B shows.", expect="BCDEA")
         self.say("repeat-mode now lists, in the minibuffer, "
-                 "the keys that repeat without C-x.", wait=2)
+                 "the keys that repeat without C-x.", wait=1.8)
         self.press("M--", self.sim.bury,
                    "Each further M-- buries the current buffer in turn…",
                    expect="CDEAB", fast=True)
@@ -594,7 +595,7 @@ class SmartBuryIntro(Scene):
         self.play(FadeIn(self.state_panel),
                   self.initial_marker_target(visible=True),
                   Transform(self.keys_text, self.keys_label("")))
-        self.wait(1.5)
+        self.wait(1.3)
         self.press("C-x _", self.sim.switch_through,
                    "C-x _ goes to the other buffer, B.", expect="BACDE")
         self.press("_", self.sim.switch_through,
