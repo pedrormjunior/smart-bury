@@ -72,7 +72,6 @@ WINDOW_WIDTH = 9.4
 WINDOW_HEIGHT = 3.4
 SIDE_X = 5.35
 CAPTION_Y = 3.45
-EXAMPLES = 3
 
 
 # Short labels for buffer boxes whose full name doesn't fit; the window's
@@ -115,12 +114,9 @@ class SmartBuryDemo(Scene):
 
         self.next_section("Intro")
         self.intro()
-        self.next_section("Switch and return")
-        self.switch_and_return()
-        self.next_section("Bury on the way")
-        self.bury_on_the_way()
-        self.next_section("Quit read-only buffer")
-        self.quit_read_only_buffer()
+        for label, title, scene in CASES:
+            self.next_section(label)
+            scene(self, label, title)
         self.next_section("Outro")
         self.outro()
 
@@ -307,9 +303,9 @@ class SmartBuryDemo(Scene):
         self.wait(1)
         self.show_keys("")
 
-    def reset(self, number: int, title: str,
+    def reset(self, label: str, title: str,
               buffers: list[str] | None = None) -> None:
-        """Introduce example NUMBER with a title card, then start over.
+        """Introduce a case with a LABEL and TITLE card, then start over.
 
         The whole stage fades out, the title shows alone in the center,
         the buffers reset to a fresh list while nothing is visible, and
@@ -322,21 +318,22 @@ class SmartBuryDemo(Scene):
         stage = list(self.mobjects)
         self.play(*(FadeOut(mobject) for mobject in stage))
 
-        label = Text(f"Example {number} of {EXAMPLES}", font_size=26,
-                     color=GRAY_B)
-        heading = Text(title, font_size=44, weight="BOLD")
-        card = VGroup(label, heading).arrange(DOWN, buff=0.3)
+        card = VGroup(Text(label, font_size=26, color=GRAY_B),
+                      Text(title, font_size=44, weight="BOLD"))
+        card.arrange(DOWN, buff=0.3)
         self.play(FadeIn(card, shift=UP * 0.2))
         self.wait(2)
         self.play(FadeOut(card))
 
         self.sim = SmartBury(buffers)
         self.key_sequence = []
-        # Rename boxes whose buffer changed names (e.g. A -> *Messages*).
-        for old_name, new_name in zip(BUFFERS, buffers):
-            if old_name != new_name:
-                self.boxes[old_name].become(BufferBox(new_name))
-                self.boxes[new_name] = self.boxes.pop(old_name)
+        # Rename boxes whose buffer isn't in the new list to the missing
+        # names (e.g. A -> *Messages* for Case 7, and back afterward).
+        unused = [name for name in self.boxes if name not in buffers]
+        missing = [name for name in buffers if name not in self.boxes]
+        for old_name, new_name in zip(unused, missing):
+            self.boxes[old_name].become(BufferBox(new_name))
+            self.boxes[new_name] = self.boxes.pop(old_name)
         for index, name in enumerate(buffers):
             self.boxes[name].move_to(slot_position(index))
         self.mode_line_label.become(self.mode_line_text(buffers[0]))
@@ -346,6 +343,22 @@ class SmartBuryDemo(Scene):
         self.initial_marker.set_opacity(0)
         self.play(*(FadeIn(mobject) for mobject in stage))
         self.wait(0.5)
+
+    def restart(self, caption: str) -> None:
+        """Start over from the default buffer list within the same case."""
+        self.say(caption, wait=0)
+        old = list(self.sim.blist)
+        self.sim = SmartBury(BUFFERS)
+        self.key_sequence = []
+        self.play(*self.box_moves(old, BUFFERS),
+                  Transform(self.mode_line_label,
+                            self.mode_line_text(BUFFERS[0])),
+                  Transform(self.window_body, self.body_lines(BUFFERS[0])),
+                  Transform(self.keys_text, self.keys_label("")),
+                  Transform(self.counter_text, self.counter_label(1)),
+                  self.initial_marker.animate.set_opacity(0),
+                  run_time=1.2)
+        self.wait(1)
 
     # Scenes
 
@@ -390,8 +403,35 @@ class SmartBuryDemo(Scene):
         self.window = window
         self.buffer_list = buffer_list
 
-    def switch_and_return(self) -> None:
-        self.reset(1, "Read something in C, then come back to A")
+    def case_1(self, label: str, title: str) -> None:
+        self.reset(label, title)
+        self.press("C-x M--", self.sim.bury,
+                   "C-x M-- buries A: it goes to the end of the list, "
+                   "and B shows.")
+        self.say("A stays out of the way until explicitly asked for "
+                 "(e.g. with C-x b).", wait=2.5)
+
+    def case_2(self, label: str, title: str) -> None:
+        self.reset(label, title)
+        self.press("C-x _", self.sim.switch_through,
+                   "C-x _ (or C-x M-_) switches to the other buffer, B.")
+        self.work("Write some lines in B…")
+        self.press("C-x _", self.sim.switch_through,
+                   "The same keys come back to A.")
+        self.say("The list is as it was. Working in B is what made "
+                 "this a new sequence (see Case 6).", wait=2.5)
+
+    def case_3(self, label: str, title: str) -> None:
+        self.reset(label, title)
+        self.press("C-x _", self.sim.switch_through,
+                   "C-x _ (or C-x M-_) presents B.")
+        self.say("Read B…", wait=1)
+        self.press("M-_", self.sim.switch_to_other,
+                   "M-_ gets back to A.")
+        self.say("And the list is exactly as it was before.", wait=2)
+
+    def case_4(self, label: str, title: str) -> None:
+        self.reset(label, title)
         self.press("C-x _", self.sim.switch_through,
                    "C-x _ switches to the other buffer, B.")
         self.press("_", self.sim.switch_through,
@@ -402,8 +442,8 @@ class SmartBuryDemo(Scene):
                    "M-_ goes back to where the sequence started, A.")
         self.say("And the list is exactly as it was before.", wait=2)
 
-    def bury_on_the_way(self) -> None:
-        self.reset(2, "B is on the way, and no longer needed")
+    def case_5(self, label: str, title: str) -> None:
+        self.reset(label, title)
         self.press("C-x _", self.sim.switch_through,
                    "C-x _ switches to B.")
         self.press("M--", self.sim.bury,
@@ -412,17 +452,54 @@ class SmartBuryDemo(Scene):
         self.press("M-_", self.sim.switch_to_other,
                    "M-_ goes back to A.")
         self.say("B is now at the end of the list, "
-                 "and C is the other buffer.", wait=2.5)
+                 "and C is the other buffer.", wait=2)
+        self.work("Work on A…")
+        self.press("C-x _", self.sim.switch_through,
+                   "To do the same again, C-x _ now goes straight to C.")
+        self.press("M-_", self.sim.switch_to_other,
+                   "M-_ goes back to A.")
+        self.say("And the list stays the same.", wait=2)
 
-    def quit_read_only_buffer(self) -> None:
-        buffers = ["*Messages*"] + BUFFERS[1:]
-        self.reset(3, "Done reading *Messages*", buffers)
+    def case_6(self, label: str, title: str) -> None:
+        self.reset(label, title)
+        for target in ("C", "B", "A"):
+            self.work(f"Work on {self.sim.current}…")
+            self.press("C-x _", self.sim.switch_through,
+                       "C-x _ _ goes two buffers deep…")
+            self.press("_", self.sim.switch_through,
+                       f"…to {target}.")
+        self.say("A, C, B, A: after a full cycle, "
+                 "the list is as it was.", wait=2.5)
+        self.work("But without working in between…")
+        for keys in ("C-x _", "_", "_", "_"):
+            self.press(keys, self.sim.switch_through)
+        self.say("…C-x _ _ followed by C-x _ _ is C-x _ _ _ _, "
+                 "which reaches E.", wait=2.5)
+
+    def case_7(self, label: str, title: str) -> None:
+        self.reset(label, title, ["*Messages*"] + BUFFERS[1:])
         self.press("q", self.sim.quit,
                    "q quits *Messages*: Smart Bury buries it and shows B.")
         self.press("_", self.sim.switch_through,
                    "_ continues the sequence, straight to C.")
         self.say("*Messages* waits at the end of the list "
                  "until it is needed again.", wait=2.5)
+
+    def why_smart(self, label: str, title: str) -> None:
+        self.reset(label, title)
+        self.press("C-x _", self.sim.switch_through, "Go to B…")
+        self.press("M--", self.sim.bury,
+                   "…and bury it right away: Smart Bury goes on to C, "
+                   "not back to A.")
+        self.say("B was simply on the way.", wait=2)
+        self.restart("Again from A, but this time we stop and work on B.")
+        self.press("C-x _", self.sim.switch_through, "Go to B…")
+        self.work("…and work on it…")
+        self.press("C-x M--", self.sim.bury,
+                   "…then burying B goes back to A, as usual.")
+        self.press("_", self.sim.switch_through,
+                   "If C was intended instead, one extra _ gets us there.")
+        self.say("Smart Bury follows what we were doing.", wait=2.5)
 
     def outro(self) -> None:
         self.play(*(FadeOut(mobject) for mobject in self.mobjects))
@@ -432,3 +509,20 @@ class SmartBuryDemo(Scene):
         VGroup(title, link).arrange(DOWN, buff=0.4)
         self.play(FadeIn(title, shift=UP * 0.2), FadeIn(link))
         self.wait(2.5)
+
+
+# The README's cases, in order: (section label, title, scene method).
+CASES = [
+    ("Case 1", "Done with A for a while", SmartBuryDemo.case_1),
+    ("Case 2", "Write in B, then come back to A", SmartBuryDemo.case_2),
+    ("Case 3", "Read something in B, then come back to A",
+     SmartBuryDemo.case_3),
+    ("Case 4", "Read something in C, then come back to A",
+     SmartBuryDemo.case_4),
+    ("Case 5", "B is on the way, and no longer needed",
+     SmartBuryDemo.case_5),
+    ("Case 6", "Working on three buffers in turn", SmartBuryDemo.case_6),
+    ("Case 7", "Done reading *Messages*", SmartBuryDemo.case_7),
+    ("Why is it “smart”?", "Buried on the way, or after working on it",
+     SmartBuryDemo.why_smart),
+]
