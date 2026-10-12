@@ -141,7 +141,7 @@ Bury command occurred.  Return non-nil if a new sequence started."
   (eq (current-buffer) smart-bury--initial-buffer))
 
 (defun smart-bury--maybe-restart-sequence nil
-  "Return non-nil if the Smart Bury sequence (re)starts with this call.
+  "Return non-nil if this call restarts the Smart Bury sequence.
 That is the case when `smart-bury--maybe-start-sequence' starts a new
 sequence, or when the user is back on `smart-bury--initial-buffer'
 while continuing one."
@@ -222,7 +222,7 @@ Unless this call starts a fresh Smart Bury sequence, switch through
           (setq smart-bury--initial-buffer last-buf))))))
 
 (defun smart-bury-switch-through-buffers nil
-  "Smartly switch to the other buffer, then further on repeated calls.
+  "Smartly switch to the other buffer, then further when repeated.
 The first call switches to the other buffer; each immediately
 following call goes one buffer further (3rd, 4th...), without burying
 the buffers on the way."

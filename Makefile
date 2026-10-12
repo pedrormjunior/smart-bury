@@ -12,6 +12,7 @@ compile:
 checkdoc:
 	emacs -batch -l checkdoc --eval \
 	  "(progn (defvar warnings 0) \
+	          (setq checkdoc-verb-check-experimental-flag t) \
 	          (advice-add 'display-warning :before \
 	                      (lambda (&rest _) (setq warnings (1+ warnings)))) \
 	          (checkdoc-file \"smart-bury.el\") \
