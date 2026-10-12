@@ -20,8 +20,8 @@ always kill the buffers afterward, even if BODY signals an error."
   (declare (indent 1))
   `(let (,@(mapcar (lambda (b) `(,(car b) (generate-new-buffer ,(cadr b))))
                    bindings)
-         (smart-bury-counter 1)
-         (smart-bury-initial-buffer nil))
+         (smart-bury--counter 1)
+         (smart-bury--initial-buffer nil))
      (unwind-protect
          (save-window-excursion
            (save-current-buffer
@@ -42,7 +42,7 @@ afterward even if BODY signals an error."
 
 (defmacro smart-bury-test-with-wrapped-commands (commands &rest body)
   "Run BODY with `smart-bury-wrapped-commands' temporarily set to
-COMMANDS (regenerating the wrapper commands, `smart-bury-commands',
+COMMANDS (regenerating the wrapper commands, `smart-bury--commands',
 and `smart-bury-mode-map' to match), always restoring and
 regenerating the original value afterward even if BODY signals an
 error."
@@ -108,7 +108,7 @@ crashing on its nil `buffer-name'."
   "With COUNTER = 2, the 2nd eligible buffer is returned, and the
 1st is switched through along the way."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
-    (setq smart-bury-counter 2)
+    (setq smart-bury--counter 2)
     (should (eq (smart-bury--go-through-buffers (list a b c)) b))
     (should (eq (current-buffer) a))))
 
@@ -125,7 +125,7 @@ already has a window; without it, a displayed buffer is skipped."
   "When COUNTER exceeds the number of eligible buffers, cycle back
 around instead of failing to make progress."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
-    (setq smart-bury-counter 3)
+    (setq smart-bury--counter 3)
     (should (eq (smart-bury--go-through-buffers (list a b) 'allow-current) a))))
 
 (ert-deftest smart-bury-test-go-through-buffers-no-eligible-signals-error ()
@@ -150,38 +150,38 @@ chasing a target buffer count it could never reach."
 
 (ert-deftest smart-bury-test-starts-now-p-is-pure ()
   "`smart-bury--starts-now-p' only reports whether LAST-COMMAND is
-outside `smart-bury-commands'; it never touches the initial buffer."
+outside `smart-bury--commands'; it never touches the initial buffer."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
-    (setq smart-bury-initial-buffer a)
+    (setq smart-bury--initial-buffer a)
     (with-current-buffer b
       (let ((last-command 'some-other-command))
         (should (smart-bury--starts-now-p)))
       (let ((last-command 'smart-bury-bury-buffer))
         (should-not (smart-bury--starts-now-p)))
-      (should (eq smart-bury-initial-buffer a)))))
+      (should (eq smart-bury--initial-buffer a)))))
 
 (ert-deftest smart-bury-test-maybe-start-sequence-fresh-command ()
-  "A LAST-COMMAND outside `smart-bury-commands' starts a new sequence
+  "A LAST-COMMAND outside `smart-bury--commands' starts a new sequence
 and records the current buffer as the initial one."
   (smart-bury-test-with-buffers ((a "sb-a"))
     (with-current-buffer a
       (let ((last-command 'some-other-command))
         (should (smart-bury--maybe-start-sequence))
-        (should (eq smart-bury-initial-buffer a))))))
+        (should (eq smart-bury--initial-buffer a))))))
 
 (ert-deftest smart-bury-test-maybe-start-sequence-continuing ()
   "A LAST-COMMAND that is a Smart Bury command means we're
 continuing a sequence, and the initial buffer is left untouched."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
-    (setq smart-bury-initial-buffer a)
+    (setq smart-bury--initial-buffer a)
     (with-current-buffer b
       (let ((last-command 'smart-bury-bury-buffer))
         (should-not (smart-bury--maybe-start-sequence))
-        (should (eq smart-bury-initial-buffer a))))))
+        (should (eq smart-bury--initial-buffer a))))))
 
 (ert-deftest smart-bury-test-is-initial-p ()
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
-    (setq smart-bury-initial-buffer a)
+    (setq smart-bury--initial-buffer a)
     (with-current-buffer a
       (should (smart-bury--is-initial-p)))
     (with-current-buffer b
@@ -196,7 +196,7 @@ continuing a sequence, and the initial buffer is left untouched."
 ;; `buffer-list' function -- so mocking `buffer-list' cannot pin down
 ;; which buffer they land on. These tests therefore check the
 ;; invariant Smart Bury is actually responsible for (that
-;; `smart-bury-initial-buffer' and `smart-bury-counter' are kept in
+;; `smart-bury--initial-buffer' and `smart-bury--counter' are kept in
 ;; sync with wherever we really end up), rather than guessing the
 ;; destination buffer.
 
@@ -209,8 +209,8 @@ without cycling through anything else yet."
     (smart-bury-test-with-buffer-list (list a b)
       (let ((last-command 'some-other-command))
         (smart-bury-bury-buffer)
-        (should (eq smart-bury-initial-buffer (current-buffer)))
-        (should (= smart-bury-counter 1))))))
+        (should (eq smart-bury--initial-buffer (current-buffer)))
+        (should (= smart-bury--counter 1))))))
 
 (ert-deftest smart-bury-test-bury-buffer-repeated-calls-track-initial-buffer ()
   "A second, immediately-following call keeps the initial-buffer and
@@ -225,8 +225,8 @@ lands each time."
       ;; `smart-bury-bury-buffer'.
       (let ((last-command 'smart-bury-bury-buffer))
         (smart-bury-bury-buffer))
-      (should (eq smart-bury-initial-buffer (current-buffer)))
-      (should (= smart-bury-counter 1)))))
+      (should (eq smart-bury--initial-buffer (current-buffer)))
+      (should (= smart-bury--counter 1)))))
 
 (ert-deftest smart-bury-test-switch-through-buffers-increments-counter ()
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
@@ -234,10 +234,10 @@ lands each time."
     (smart-bury-test-with-buffer-list (list a b c)
       (let ((last-command 'some-other-command))
         (smart-bury-switch-through-buffers))
-      (should (= smart-bury-counter 2))
+      (should (= smart-bury--counter 2))
       (let ((last-command 'smart-bury-switch-through-buffers))
         (smart-bury-switch-through-buffers))
-      (should (= smart-bury-counter 3)))))
+      (should (= smart-bury--counter 3)))))
 
 (ert-deftest smart-bury-test-switch-through-then-switch-to-other-returns-to-origin ()
   "Repetitive calls to `smart-bury-switch-through-buffers' followed
@@ -294,10 +294,10 @@ the real, dynamic most-recently-used buffer ordering."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
     (switch-to-buffer a)
     (smart-bury-test-with-buffer-list (list a b c)
-      (setq smart-bury-counter 5)
+      (setq smart-bury--counter 5)
       (let ((last-command 'smart-bury-switch-through-buffers))
         (smart-bury-switch-to-other-buffer))
-      (should (= smart-bury-counter 2)))))
+      (should (= smart-bury--counter 2)))))
 
 (ert-deftest smart-bury-test-kill-current-buffer ()
   "Killing the current buffer should leave us on another live,
@@ -625,11 +625,11 @@ customization of `smart-bury-keys'."
 (ert-deftest smart-bury-test-wrapped-commands-default-defines-expected-wrappers ()
   "The default value generates `smart-bury-quit-window' and
 `smart-bury-kill-current-buffer', and both are tracked in
-`smart-bury-commands'."
+`smart-bury--commands'."
   (should (fboundp 'smart-bury-quit-window))
   (should (fboundp 'smart-bury-kill-current-buffer))
-  (should (memq 'smart-bury-quit-window smart-bury-commands))
-  (should (memq 'smart-bury-kill-current-buffer smart-bury-commands)))
+  (should (memq 'smart-bury-quit-window smart-bury--commands))
+  (should (memq 'smart-bury-kill-current-buffer smart-bury--commands)))
 
 (ert-deftest smart-bury-test-wrapped-commands-reuses-interactive-form ()
   "A generated wrapper's `interactive' spec matches the wrapped
@@ -642,21 +642,21 @@ prefix-arg-driven KILL/WINDOW)."
 
 (ert-deftest smart-bury-test-wrapped-commands-excludes-removed-entry ()
   "Excluding `quit-window' from the list removes it from
-`smart-bury-commands' and drops its remap from `smart-bury-mode-map',
+`smart-bury--commands' and drops its remap from `smart-bury-mode-map',
 while `kill-current-buffer' -- still in the list -- keeps its remap."
   (smart-bury-test-with-wrapped-commands '(kill-current-buffer)
-    (should-not (memq 'smart-bury-quit-window smart-bury-commands))
+    (should-not (memq 'smart-bury-quit-window smart-bury--commands))
     (should-not (lookup-key smart-bury-mode-map [remap quit-window]))
-    (should (memq 'smart-bury-kill-current-buffer smart-bury-commands))
+    (should (memq 'smart-bury-kill-current-buffer smart-bury--commands))
     (should (eq (lookup-key smart-bury-mode-map [remap kill-current-buffer])
                #'smart-bury-kill-current-buffer))))
 
 (ert-deftest smart-bury-test-wrapped-commands-includes-new-entry ()
   "Adding an arbitrary interactive command to the list defines its
-wrapper and tracks it in `smart-bury-commands'."
+wrapper and tracks it in `smart-bury--commands'."
   (smart-bury-test-with-wrapped-commands '(quit-window kill-current-buffer other-window)
     (should (fboundp 'smart-bury-other-window))
-    (should (memq 'smart-bury-other-window smart-bury-commands))
+    (should (memq 'smart-bury-other-window smart-bury--commands))
     (should (eq (lookup-key smart-bury-mode-map [remap other-window])
                #'smart-bury-other-window))
     (should (eq (get 'smart-bury-other-window 'repeat-map) 'smart-bury-repeat-map))))
@@ -667,12 +667,12 @@ restores the previous configuration afterward."
   (let ((before smart-bury-wrapped-commands))
     (smart-bury-test-with-wrapped-commands '(kill-current-buffer))
     (should (equal smart-bury-wrapped-commands before))
-    (should (memq 'smart-bury-quit-window smart-bury-commands))))
+    (should (memq 'smart-bury-quit-window smart-bury--commands))))
 
 (ert-deftest smart-bury-test-wrapped-commands-skips-undefined-command-with-warning ()
   "Setting the list to include a wholly undefined symbol skips it
 with a warning instead of erroring: the other, valid entries in the
-same list still get wrapped normally, `smart-bury-commands' only
+same list still get wrapped normally, `smart-bury--commands' only
 includes the valid ones, and no dangling remap is left for the bad
 one.  This is a regression test: an earlier version signaled a
 `user-error' for any invalid entry, which -- since this runs as the
@@ -687,10 +687,10 @@ one bad entry."
           '(quit-window totally-undefined-xyz-zzz kill-current-buffer)
         (should warnings)
         (should-not (fboundp 'smart-bury-totally-undefined-xyz-zzz))
-        (should-not (memq 'smart-bury-totally-undefined-xyz-zzz smart-bury-commands))
+        (should-not (memq 'smart-bury-totally-undefined-xyz-zzz smart-bury--commands))
         (should-not (lookup-key smart-bury-mode-map [remap totally-undefined-xyz-zzz]))
-        (should (memq 'smart-bury-quit-window smart-bury-commands))
-        (should (memq 'smart-bury-kill-current-buffer smart-bury-commands))
+        (should (memq 'smart-bury-quit-window smart-bury--commands))
+        (should (memq 'smart-bury-kill-current-buffer smart-bury--commands))
         (should (eq (lookup-key smart-bury-mode-map [remap quit-window])
                    #'smart-bury-quit-window))))))
 
@@ -705,7 +705,7 @@ instead of an error."
       (smart-bury-test-with-wrapped-commands '(quit-window +)
         (should warnings)
         (should-not (fboundp 'smart-bury-+))
-        (should (memq 'smart-bury-quit-window smart-bury-commands))))))
+        (should (memq 'smart-bury-quit-window smart-bury--commands))))))
 
 (provide 'smart-bury-tests)
 

@@ -71,15 +71,15 @@
 Unlike the wrappers generated from `smart-bury-wrapped-commands',
 they are defined by hand.")
 
-(defvar smart-bury-commands (copy-sequence smart-bury--basic-commands)
+(defvar smart-bury--commands (copy-sequence smart-bury--basic-commands)
   "Commands allowed by Smart Bury without resetting configuration.
 Extended with each wrapper generated from `smart-bury-wrapped-commands'
 whenever that variable is set.")
 
-(defvar smart-bury-counter 1
+(defvar smart-bury--counter 1
   "How many buffers deep the current Smart Bury sequence is.")
 
-(defvar smart-bury-initial-buffer nil
+(defvar smart-bury--initial-buffer nil
   "The current buffer when the first Smart Bury command was called.")
 
 (defgroup smart-bury nil
@@ -124,26 +124,26 @@ of the current frame."
 
 (defun smart-bury--starts-now-p nil
   "Check if `last-command' was *not* one of the Smart Bury ones.
-The Smart Bury commands are stored in `smart-bury-commands'."
-  (not (memq last-command smart-bury-commands)))
+The Smart Bury commands are stored in `smart-bury--commands'."
+  (not (memq last-command smart-bury--commands)))
 
 (defun smart-bury--maybe-start-sequence nil
   "Start a new Smart Bury sequence if this call begins one.
-When `smart-bury--starts-now-p', set `smart-bury-initial-buffer' to
+When `smart-bury--starts-now-p', set `smart-bury--initial-buffer' to
 the current buffer, i.e., the one from which the first call to a Smart
 Bury command occurred.  Return non-nil if a new sequence started."
   (when (smart-bury--starts-now-p)
-    (setq smart-bury-initial-buffer (current-buffer))
+    (setq smart-bury--initial-buffer (current-buffer))
     t))
 
 (defun smart-bury--is-initial-p nil
   "Check if current buffer is the initial one."
-  (eq (current-buffer) smart-bury-initial-buffer))
+  (eq (current-buffer) smart-bury--initial-buffer))
 
 (defun smart-bury--maybe-restart-sequence nil
   "Return non-nil if the Smart Bury sequence (re)starts with this call.
 That is the case when `smart-bury--maybe-start-sequence' starts a new
-sequence, or when the user is back on `smart-bury-initial-buffer'
+sequence, or when the user is back on `smart-bury--initial-buffer'
 while continuing one."
   (or (smart-bury--maybe-start-sequence)
       (smart-bury--is-initial-p)))
@@ -189,37 +189,37 @@ skip these intermediate switches by jumping straight to a buffer."
   (mapc #'switch-to-buffer (reverse selection)))
 
 (defun smart-bury--go-through-buffers (buffers &optional allow-current)
-  "Go through `smart-bury-counter' buffers of BUFFERS.
+  "Go through `smart-bury--counter' buffers of BUFFERS.
 Walk back through all of them except the last one (see
 `smart-bury--walk-back'), and return the last one instead, for the
 caller to switch to.  See `smart-bury--select-buffers' for
 ALLOW-CURRENT, wrapping around, and the error when no buffer is
 eligible."
   (let ((selection (smart-bury--select-buffers
-                    buffers smart-bury-counter allow-current)))
+                    buffers smart-bury--counter allow-current)))
     (smart-bury--walk-back (butlast selection))
     (car (last selection))))
 
 (defun smart-bury--run-function (func &rest r)
   "Run FUNC passing arguments in R to it, then switch smartly.
 Unless this call starts a fresh Smart Bury sequence, switch through
-`smart-bury-counter' buffers afterward, keeping
-`smart-bury-initial-buffer' in sync with where the sequence lands."
+`smart-bury--counter' buffers afterward, keeping
+`smart-bury--initial-buffer' in sync with where the sequence lands."
   ;; `let*': a new sequence makes the current buffer the initial one,
   ;; so WAS-INITIAL is always non-nil when STARTS-NOW is.
   (let* ((starts-now (smart-bury--maybe-start-sequence))
          (was-initial (smart-bury--is-initial-p)))
     (apply func r)
     (when was-initial
-      (setq smart-bury-counter 1))
+      (setq smart-bury--counter 1))
     (if starts-now
-        (setq smart-bury-initial-buffer (current-buffer))
+        (setq smart-bury--initial-buffer (current-buffer))
       (let ((last-buf (switch-to-buffer
                        (smart-bury--go-through-buffers
                         (smart-bury--buffer-list)
                         'allow-current))))
         (when was-initial
-          (setq smart-bury-initial-buffer last-buf))))))
+          (setq smart-bury--initial-buffer last-buf))))))
 
 (defun smart-bury-switch-through-buffers nil
   "Smartly switch to the other buffer, then further on repeated calls.
@@ -228,30 +228,30 @@ following call goes one buffer further (3rd, 4th...), without burying
 the buffers on the way."
   (interactive)
   (when (smart-bury--maybe-restart-sequence)
-    (setq smart-bury-counter 1))
+    (setq smart-bury--counter 1))
   (switch-to-buffer
    (smart-bury--go-through-buffers (cdr (smart-bury--buffer-list))))
-  (smart-bury--report "buffer %d — %s" smart-bury-counter (buffer-name))
-  (setq smart-bury-counter (1+ smart-bury-counter)))
+  (smart-bury--report "buffer %d — %s" smart-bury--counter (buffer-name))
+  (setq smart-bury--counter (1+ smart-bury--counter)))
 
 (defun smart-bury-switch-to-other-buffer nil
   "Smartly switch to the other buffer.
 Switches to the buffer the user was in when the current Smart Bury
-sequence began (`smart-bury-initial-buffer').  If already back on
+sequence began (`smart-bury--initial-buffer').  If already back on
 that buffer -- either because this starts a fresh sequence, or
 because the user switched back to it already -- switches instead to
 the \"other\" buffer, the next most recently used one.  Calling this
 repeatedly therefore alternates back and forth between the two."
   (interactive)
-  (setq smart-bury-counter
+  (setq smart-bury--counter
         (if (smart-bury--maybe-restart-sequence)
             2
-          (max 2 smart-bury-counter)))
+          (max 2 smart-bury--counter)))
   (smart-bury--walk-back
    (smart-bury--select-buffers (cdr (smart-bury--buffer-list))
-                               (1- smart-bury-counter)))
+                               (1- smart-bury--counter)))
   (smart-bury--report "switched to %s" (buffer-name))
-  (setq smart-bury-counter 2))
+  (setq smart-bury--counter 2))
 
 (defun smart-bury-bury-buffer (&optional buffer-or-name)
   "Smartly put buffer at the end of the list of all buffers.
@@ -447,7 +447,7 @@ immediately."
 (defun smart-bury--set-wrapped-commands (symbol value)
   "Set SYMBOL to VALUE and regenerate the wrapper commands.
 Used as the `:set' function of `smart-bury-wrapped-commands'.  Also
-update `smart-bury-commands' and Smart Bury's keymaps to match VALUE.
+update `smart-bury--commands' and Smart Bury's keymaps to match VALUE.
 
 Any entry in VALUE that isn't a usable interactive command (e.g.
 undefined -- as can happen with a stale saved Customize value
@@ -468,7 +468,7 @@ the first place."
                                    nil)))
                            value)))
     (setq smart-bury--valid-wrapped-commands valid)
-    (setq smart-bury-commands
+    (setq smart-bury--commands
           (append smart-bury--basic-commands
                   (mapcar #'smart-bury--wrapper-name valid)))
     (dolist (fn valid)
@@ -481,7 +481,7 @@ the first place."
 `smart-bury-bury-buffer' is defined separately (it has its own entry
 in `smart-bury-keys') and is not part of this list.  Setting this
 variable (e.g. via `setopt' or Customize) regenerates the wrapper
-commands and keeps `smart-bury-commands', `smart-bury-mode-map', and
+commands and keeps `smart-bury--commands', `smart-bury-mode-map', and
 `smart-bury-repeat-map' in sync."
   :type '(repeat function)
   :group 'smart-bury
