@@ -1,4 +1,4 @@
-.PHONY: test compile checkdoc package-lint test-interactively test-emacs-defaults-interactively
+.PHONY: test compile checkdoc package-lint demo-check demo-preview test-interactively test-emacs-defaults-interactively
 
 test:
 	emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el \
@@ -32,6 +32,18 @@ package-lint:
 	            (package-install 'package-lint) \
 	            (require 'package-lint)))" \
 	  -f package-lint-batch-and-exit smart-bury.el
+
+# The demo animation lives in demo/, a separate uv project (see
+# demo/pyproject.toml).  demo-check replays the README cases on the
+# Python model of the algorithm that drives the animation.
+demo-check:
+	cd demo && uv run python smart_bury_sim.py
+
+# Fast, low-quality render (480p15) into demo/smart-bury-demo-preview.mp4.
+demo-preview: demo-check
+	cd demo && uv run manim -ql --media_dir media \
+	  -o smart-bury-demo-preview smart_bury_demo.py SmartBuryDemo
+	cp demo/media/videos/smart_bury_demo/480p15/smart-bury-demo-preview.mp4 demo/
 
 test-interactively:
 	emacs -Q -L . -l smart-bury -l $@
