@@ -11,8 +11,8 @@ head of the list.  In Emacs the window's own buffer history decides
 instead; for the single-window scenarios here the result is the same,
 which ``check()`` confirms against the README cases.
 
-Run this file directly to replay the README cases and exit non-zero on
-any mismatch.
+Run this file directly to replay the README cases (and a few more) and
+exit non-zero on any mismatch.
 """
 
 from __future__ import annotations
@@ -25,10 +25,18 @@ SWITCH_TO_OTHER = "smart-bury-switch-to-other-buffer"
 BURY = "smart-bury-bury-buffer"
 QUIT = "smart-bury-quit-window"
 WORK = "self-insert-command"
+SWITCH_TO_BUFFER = "switch-to-buffer"
 
 # `smart-bury--commands' with the default `smart-bury-wrapped-commands'
 # (only the wrappers the demo uses).
 SMART_COMMANDS = {SWITCH_THROUGH, SWITCH_TO_OTHER, BURY, QUIT}
+
+
+def other_buffer(blist) -> str | None:
+    """`(other-buffer)' for a single window: the most recent buffer
+    other than the current one, skipping internal buffers (names
+    starting with a space).  It is also `C-x b's default."""
+    return next((b for b in blist[1:] if not b.startswith(" ")), None)
 
 
 @dataclass(frozen=True)
@@ -46,6 +54,10 @@ class Step:
     def current(self) -> str:
         return self.blist[0]
 
+    @property
+    def other(self) -> str | None:
+        return other_buffer(self.blist)
+
 
 class SmartBury:
     """Smart Bury's state and commands over a single window."""
@@ -60,6 +72,10 @@ class SmartBury:
     @property
     def current(self) -> str:
         return self.blist[0]
+
+    @property
+    def other(self) -> str | None:
+        return other_buffer(self.blist)
 
     # Primitives
 
@@ -158,6 +174,13 @@ class SmartBury:
     def quit(self, keys: str = "q", caption: str = "") -> Step:
         self._run_function(self._bury)
         return self._record(keys, QUIT, caption)
+
+    def switch_to_buffer(self, name: str, keys: str = "C-x b",
+                         caption: str = "") -> Step:
+        """Vanilla `switch-to-buffer' (C-x b NAME RET).  Not a Smart Bury
+        command, so the next Smart Bury command starts a new sequence."""
+        self._switch(name)
+        return self._record(keys, SWITCH_TO_BUFFER, caption)
 
     def work(self, caption: str = "") -> Step:
         """Any non-Smart Bury command, which ends the current sequence."""
@@ -269,6 +292,38 @@ def check() -> list[str]:
     sb.switch_through()
     _expect("why-smart then _", sb.current, "C", failures)
 
+    # Beyond the README (verified against smart-bury.el in batch Emacs):
+    # burying every buffer in a row cycles back to the initial order.
+    sb = SmartBury(BUFFERS)
+    for _ in BUFFERS:
+        sb.bury()
+    _expect("bury all", order(sb), "ABCDE", failures)
+
+    # Switching through to the last buffer, working on it, then burying
+    # it returns to the initial order.
+    sb = SmartBury(BUFFERS)
+    for _ in BUFFERS[1:]:
+        sb.switch_through()
+    _expect("through to the last", order(sb), "EABCD", failures)
+    sb.work()
+    sb.bury()
+    _expect("work, then bury the last", order(sb), "ABCDE", failures)
+
+    # C-x b is not a Smart Bury command: it ends the sequence, so C-x _
+    # afterward starts a new one from the buffer it switched to.
+    sb = SmartBury(BUFFERS)
+    sb.switch_through()
+    sb.switch_to_buffer("D")
+    _expect("C-x b D", order(sb), "DBACE", failures)
+    sb.switch_through()
+    _expect("C-x b then C-x _", (sb.current, sb.initial), ("B", "D"),
+            failures)
+
+    # The other buffer is the second in the list, skipping internal ones.
+    _expect("other", SmartBury(BUFFERS).other, "B", failures)
+    _expect("other skips internal", SmartBury(["A", " *x*", "C"]).other, "C",
+            failures)
+
     return failures
 
 
@@ -278,4 +333,4 @@ if __name__ == "__main__":
         print(f"FAIL {failure}")
     if failures:
         sys.exit(1)
-    print("smart_bury_sim: all README cases match")
+    print("smart_bury_sim: all checks match (README cases and more)")

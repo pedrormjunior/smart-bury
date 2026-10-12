@@ -1,4 +1,4 @@
-.PHONY: test compile checkdoc package-lint demo-check demo-preview demo test-interactively test-emacs-defaults-interactively
+.PHONY: test compile checkdoc package-lint demo-check demo-preview demo intro-check intro-preview intro test-interactively test-emacs-defaults-interactively
 
 test:
 	emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el \
@@ -50,6 +50,24 @@ demo: demo-check
 	cd demo && uv run manim -qh --media_dir media \
 	  -o smart-bury-demo smart_bury_demo.py SmartBuryDemo
 	cp demo/media/videos/smart_bury_demo/1080p60/smart-bury-demo.mp4 demo/
+
+# The short introduction (demo/smart_bury_intro.py).  intro-check runs the
+# scene without rendering, which asserts every storyboard step's
+# expected buffer order against the model.
+intro-check: demo-check
+	cd demo && uv run manim --dry_run smart_bury_intro.py SmartBuryIntro
+
+# Fast, low-quality render (480p15) into demo/smart-bury-intro-preview.mp4.
+intro-preview: intro-check
+	cd demo && uv run manim -ql --media_dir media \
+	  -o smart-bury-intro-preview smart_bury_intro.py SmartBuryIntro
+	cp demo/media/videos/smart_bury_intro/480p15/smart-bury-intro-preview.mp4 demo/
+
+# Final render (1080p60) into demo/smart-bury-intro.mp4.
+intro: intro-check
+	cd demo && uv run manim -qh --media_dir media \
+	  -o smart-bury-intro smart_bury_intro.py SmartBuryIntro
+	cp demo/media/videos/smart_bury_intro/1080p60/smart-bury-intro.mp4 demo/
 
 test-interactively:
 	emacs -Q -L . -l smart-bury -l $@
