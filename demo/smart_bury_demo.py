@@ -72,6 +72,7 @@ WINDOW_WIDTH = 9.4
 WINDOW_HEIGHT = 3.4
 SIDE_X = 5.35
 CAPTION_Y = 3.45
+EXAMPLES = 3
 
 
 # Short labels for buffer boxes whose full name doesn't fit; the window's
@@ -306,37 +307,45 @@ class SmartBuryDemo(Scene):
         self.wait(1)
         self.show_keys("")
 
-    def reset(self, title: str, buffers: list[str] | None = None) -> None:
-        """Show a section title and start over from a fresh buffer list."""
+    def reset(self, number: int, title: str,
+              buffers: list[str] | None = None) -> None:
+        """Introduce example NUMBER with a title card, then start over.
+
+        The whole stage fades out, the title shows alone in the center,
+        the buffers reset to a fresh list while nothing is visible, and
+        the stage fades back in.
+        """
         buffers = buffers or BUFFERS
-        heading = Text(title, font_size=40, weight="BOLD")
-        heading.move_to(UP * CAPTION_Y)
         if self.caption is not None:
             self.play(FadeOut(self.caption))
-        self.caption = None
-        old = list(self.sim.blist)
+            self.caption = None
+        stage = list(self.mobjects)
+        self.play(*(FadeOut(mobject) for mobject in stage))
+
+        label = Text(f"Example {number} of {EXAMPLES}", font_size=26,
+                     color=GRAY_B)
+        heading = Text(title, font_size=44, weight="BOLD")
+        card = VGroup(label, heading).arrange(DOWN, buff=0.3)
+        self.play(FadeIn(card, shift=UP * 0.2))
+        self.wait(2)
+        self.play(FadeOut(card))
+
         self.sim = SmartBury(buffers)
         self.key_sequence = []
-        animations = []
         # Rename boxes whose buffer changed names (e.g. A -> *Messages*).
         for old_name, new_name in zip(BUFFERS, buffers):
             if old_name != new_name:
-                renamed = BufferBox(new_name).move_to(self.boxes[old_name])
-                animations.append(Transform(self.boxes[old_name], renamed))
+                self.boxes[old_name].become(BufferBox(new_name))
                 self.boxes[new_name] = self.boxes.pop(old_name)
-                old[old.index(old_name)] = new_name
-        animations += self.box_moves(old, list(buffers))
-        animations += [
-            Transform(self.mode_line_label, self.mode_line_text(buffers[0])),
-            Transform(self.window_body, self.body_lines(buffers[0])),
-            Transform(self.keys_text, self.keys_label("")),
-            Transform(self.counter_text, self.counter_label(1)),
-            self.initial_marker.animate.set_opacity(0),
-        ]
-        self.play(FadeIn(heading, shift=DOWN * 0.15), *animations,
-                  run_time=1.2)
-        self.wait(1.5)
-        self.play(FadeOut(heading))
+        for index, name in enumerate(buffers):
+            self.boxes[name].move_to(slot_position(index))
+        self.mode_line_label.become(self.mode_line_text(buffers[0]))
+        self.window_body.become(self.body_lines(buffers[0]))
+        self.keys_text.become(self.keys_label(""))
+        self.counter_text.become(self.counter_label(1))
+        self.initial_marker.set_opacity(0)
+        self.play(*(FadeIn(mobject) for mobject in stage))
+        self.wait(0.5)
 
     # Scenes
 
@@ -382,7 +391,7 @@ class SmartBuryDemo(Scene):
         self.buffer_list = buffer_list
 
     def switch_and_return(self) -> None:
-        self.reset("Read something in C, then come back to A")
+        self.reset(1, "Read something in C, then come back to A")
         self.press("C-x _", self.sim.switch_through,
                    "C-x _ switches to the other buffer, B.")
         self.press("_", self.sim.switch_through,
@@ -394,7 +403,7 @@ class SmartBuryDemo(Scene):
         self.say("And the list is exactly as it was before.", wait=2)
 
     def bury_on_the_way(self) -> None:
-        self.reset("B is on the way, and no longer needed")
+        self.reset(2, "B is on the way, and no longer needed")
         self.press("C-x _", self.sim.switch_through,
                    "C-x _ switches to B.")
         self.press("M--", self.sim.bury,
@@ -407,7 +416,7 @@ class SmartBuryDemo(Scene):
 
     def quit_read_only_buffer(self) -> None:
         buffers = ["*Messages*"] + BUFFERS[1:]
-        self.reset("Done reading *Messages*", buffers)
+        self.reset(3, "Done reading *Messages*", buffers)
         self.press("q", self.sim.quit,
                    "q quits *Messages*: Smart Bury buries it and shows B.")
         self.press("_", self.sim.switch_through,
