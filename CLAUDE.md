@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run a single test: `emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el --eval '(ert-run-tests-batch-and-exit "test-name-regexp")'` (no `-f ert-run-tests-batch-and-exit` here — that would run every test and exit before the `--eval` is reached),
   or interactively via `emacsclient` (see `emacs-skills:emacsclient` — always use `emacsclient`, not `emacs`, for interactive elisp work, byte compilation, or `check-parens`).
 - Lint docstrings: `make checkdoc` (runs `checkdoc-file` on `smart-bury.el`; exits non-zero if it reports any warning).
+- Lint package metadata and Emacs-version compatibility: `make package-lint` (runs `package-lint` on `smart-bury.el`, as MELPA does; requires `package-lint` installed in the user's own Emacs, loaded via `package-initialize`).
 - Try the package interactively, isolated from the user's own init file: `make test-interactively` (loads `smart-bury.el` and `test-interactively.el` under `emacs -Q`; see that file for what it sets up — enabling `smart-bury-mode`/`repeat-mode`, a repeat binding for `smart-bury-kill-current-buffer`, and a few throwaway buffers).
 - Compare against vanilla behavior: `make test-emacs-defaults-interactively` (plain `emacs -Q` plus only a dark theme from `test-emacs-defaults-interactively.el`; does *not* load `smart-bury.el`).
 
