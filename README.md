@@ -1,5 +1,7 @@
 # Smart Bury
 
+*Keep wanted buffers at the top of the “list of all buffers”.*
+
 Smart Bury makes switching buffers in a window a matter of a few
 repeated key presses: bury, quit, or kill the current buffer, or go
 through the most recently used buffers, without typing any buffer
