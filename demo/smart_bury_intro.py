@@ -71,7 +71,9 @@ CURRENT_COLOR = "#00bfff"
 # real message lists them, which follows `smart-bury-keys' (switch
 # through, switch to the other buffer, bury).
 REPEAT_KEYS = ["_", "M-_", "M--"]
-INITIAL_COLOR = "#ff9fbf"   # "initial" marker and counter
+INITIAL_COLOR = CURRENT_COLOR   # "initial" marker and counter
+TITLE_COLOR = CURRENT_COLOR     # "Smart Bury" at the start and the end
+LINE_OPACITY = 0.85             # the window's colored text lines
 OTHER_COLOR = GRAY_A
 PROMPT_COLOR = CURRENT_COLOR
 BACKGROUND = "#000000"
@@ -314,7 +316,7 @@ class SmartBuryIntro(Scene):
             start = RIGHT * (left + indent) + UP * (top - 0.48 * i)
             lines.add(Line(start, start + RIGHT * width,
                            color=COLORS[name], stroke_width=6,
-                           stroke_opacity=0.55))
+                           stroke_opacity=LINE_OPACITY))
         return lines
 
     def mode_line_text(self, name: str) -> Text:
@@ -600,18 +602,22 @@ class SmartBuryIntro(Scene):
         self.sim.work()
         if expect is not None:
             self.expect(expect, "work")
-        typing = Text("typing…", font_size=24, color=DIM_COLOR, slant="ITALIC")
-        typing.move_to(self.keys_box)
+        # "typing…" appears in the window, in place of its first line.
+        line = self.window_body[0]
+        typing = Text("typing…", font_size=24, slant="ITALIC",
+                      color=COLORS[self.sim.current])
+        typing.move_to(line.get_start(), aligned_edge=LEFT)
         animations = self.keys_clear() + [
+            line.animate.set_stroke(opacity=0),
             FadeIn(typing),
-            Indicate(self.window_body, color=WHITE, scale_factor=1.03),
             Transform(self.minibuffer, self.minibuffer_label()),
         ]
         if self.state_visible:
             animations.append(self.initial_marker.animate.set_opacity(0))
         self.play(*animations, run_time=0.8)
-        self.wait(0.7)
-        self.play(FadeOut(typing), run_time=0.3)
+        self.wait(0.9)
+        self.play(FadeOut(typing), line.animate.set_stroke(opacity=LINE_OPACITY),
+                  run_time=0.4)
 
     def switch_to_buffer(self, name: str, caption: str = "",
                          expect: str | None = None,
@@ -652,7 +658,8 @@ class SmartBuryIntro(Scene):
         self.key_boxes = []
 
     def title_card(self) -> None:
-        title = Text("Smart Bury", font_size=72, weight="BOLD")
+        title = Text("Smart Bury", font_size=72, weight="BOLD",
+                     color=TITLE_COLOR)
         tagline = Text(TAGLINE, font_size=30, color=DIM_COLOR)
         VGroup(title, tagline).arrange(DOWN, buff=0.4)
         self.play(Write(title), FadeIn(tagline, shift=UP * 0.2))
@@ -770,7 +777,9 @@ class SmartBuryIntro(Scene):
                   Create(self.window_body, lag_ratio=0.2),
                   FadeIn(minibuffer_hint))
         self.add(self.minibuffer)
-        self.wait(1.2)
+        self.wait(0.8)
+        self.play(Indicate(minibuffer_hint, color=CURRENT_COLOR,
+                           scale_factor=1.25), run_time=1.2)
         self.play(FadeOut(minibuffer_hint))
 
         self.say("Keys pressed appear on the right.", wait=0)
@@ -840,7 +849,7 @@ class SmartBuryIntro(Scene):
 
     def switching_to_other(self) -> None:
         self.press("C-x M-_", self.sim.switch_to_other,
-                   "`C-x M-_` switches to the ~other buffer~, B…",
+                   "`C-x M-_` also switches to the ~other buffer~, B…",
                    expect="BACDE")
         self.press("M-_", self.sim.switch_to_other,
                    "…and `M-_` switches back, as many times as wanted.",
@@ -882,7 +891,8 @@ class SmartBuryIntro(Scene):
 
     def outro(self) -> None:
         self.clear_all()
-        title = Text("Smart Bury", font_size=64, weight="BOLD")
+        title = Text("Smart Bury", font_size=64, weight="BOLD",
+                     color=TITLE_COLOR)
         tagline = Text(TAGLINE, font_size=28, color=DIM_COLOR)
         link = Text("github.com/pedrormjunior/smart-bury", font=MONO,
                     font_size=26, color=DIM_COLOR)
