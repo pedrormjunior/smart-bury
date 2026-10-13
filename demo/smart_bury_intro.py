@@ -82,7 +82,7 @@ NAME_COLOR = "#00bfff"  # command and mode names
 DIM_COLOR = "#ebdbb2"   # secondary (dimmed) text
 HIGHLIGHT = NAME_COLOR
 KEY_FILL = GRAY_D
-KEY_STROKE = GRAY_B
+KEY_STROKE = DIM_COLOR
 TAGLINE = "Keep wanted buffers at the top of the “list of all buffers”"
 
 # Geometry (Manim's frame is about 14.2 x 8 units, centered on ORIGIN).
