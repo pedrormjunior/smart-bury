@@ -30,7 +30,7 @@ from manim import (
     GRAY_B,
     GRAY_D,
     WHITE,
-    YELLOW,
+    ManimColor,
     AnimationGroup,
     Create,
     DashedVMobject,
@@ -49,10 +49,10 @@ from manim import (
     Write,
 )
 
-from smart_bury_demo import BACKGROUND, INITIAL_COLOR, MONO
+from smart_bury_demo import MONO
 from smart_bury_sim import SMART_COMMANDS, SmartBury
 
-Text.set_default(font="Sans")
+Text.set_default(font="Sans", color="#ebdbb2")
 
 BUFFERS = ["A", "B", "C", "D", "E"]
 # Rainbow colors, so the list's order is easy to follow (the long demo
@@ -65,9 +65,13 @@ COLORS = {
     "E": "#b07ce8",     # violet (not blue, to stay apart from CURRENT_COLOR)
 }
 CURRENT_COLOR = "#00bfff"
+INITIAL_COLOR = "#ff9fbf"   # "initial" marker and counter
 OTHER_COLOR = GRAY_A
 PROMPT_COLOR = CURRENT_COLOR
-HIGHLIGHT = YELLOW.to_hex()
+BACKGROUND = "#000000"
+NAME_COLOR = "#00bfff"  # command and mode names
+DIM_COLOR = "#ebdbb2"   # secondary (dimmed) text
+HIGHLIGHT = NAME_COLOR
 KEY_FILL = GRAY_D
 KEY_STROKE = GRAY_B
 TAGLINE = "Keep wanted buffers at the top of the “list of all buffers”"
@@ -129,7 +133,7 @@ def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
             key = text[i + 1:end]
             keys.append((len(plain), len(plain) + len(key)))
             plain += key
-            markup += (f'<span font_family="{MONO}" foreground="#FFFFFF">'
+            markup += (f'<span font_family="{MONO}" foreground="{{color}}">'
                        f'{escape(key)}</span>')
             i = end + 1
         elif char == "{":
@@ -155,7 +159,7 @@ def glyph_count(text: str) -> int:
     return sum(1 for char in text if not char.isspace())
 
 
-def rich_text(text: str, font_size: float = 26, color=WHITE,
+def rich_text(text: str, font_size: float = 26, color=None,
               font: str = "Sans") -> VGroup:
     """Render TEXT (see `parse_rich') as one line: VGroup(boxes, glyphs).
 
@@ -170,7 +174,10 @@ def rich_text(text: str, font_size: float = 26, color=WHITE,
     neighboring text stays clear of its box.  (A space character can't
     do this: in a monospace font every space is a full cell wide.)
     """
+    color = DIM_COLOR if color is None else color
     plain, markup, keys = parse_rich(text)
+    # Keys take the text's color.
+    markup = markup.replace("{color}", ManimColor(color).to_hex())
     strut = "M"
     rendered = MarkupText(
         f'<span font_features="liga=0">{strut}{markup}</span>',
@@ -217,7 +224,7 @@ def buffer_box(name: str) -> VGroup:
     box = RoundedRectangle(corner_radius=0.15, width=1.3, height=0.9,
                            color=COLORS[name], stroke_width=4,
                            fill_color=COLORS[name], fill_opacity=0.25)
-    label = Text(name, font=MONO, font_size=34, color=WHITE)
+    label = Text(name, font=MONO, font_size=34, color=DIM_COLOR)
     return VGroup(box, label.move_to(box))
 
 
@@ -256,11 +263,11 @@ class SmartBuryIntro(Scene):
         self.boxes = {name: buffer_box(name).move_to(slot_position(index))
                       for index, name in enumerate(self.sim.blist)}
         first, last = slot_position(0), slot_position(len(BUFFERS) - 1)
-        title = Text("list of all buffers", font_size=22, color=GRAY_B)
+        title = Text("list of all buffers", font_size=22, color=DIM_COLOR)
         title.move_to(RIGHT * (first[0] - 0.65) + UP * LIST_TITLE_Y,
                       aligned_edge=LEFT)
         direction = Text("most recent  →  least recent", font_size=18,
-                         color=GRAY_B)
+                         color=DIM_COLOR)
         direction.move_to(RIGHT * (last[0] + 0.65) + UP * LIST_TITLE_Y,
                           aligned_edge=RIGHT)
         self.list_labels = VGroup(title, direction)
@@ -305,7 +312,7 @@ class SmartBuryIntro(Scene):
         return lines
 
     def mode_line_text(self, name: str) -> Text:
-        text = Text(name, font=MONO, font_size=24, color=WHITE)
+        text = Text(name, font=MONO, font_size=24, color=DIM_COLOR)
         text.move_to(self.mode_line, aligned_edge=LEFT)
         return text.shift(RIGHT * 0.3)
 
@@ -327,8 +334,8 @@ class SmartBuryIntro(Scene):
         # space after the prompt's colon.
         line = MarkupText(f'<span foreground="{PROMPT_COLOR}">'
                           f'{escape(prompt)}</span>{escape(typed or "M")}',
-                          font=MONO, font_size=22, color=WHITE)
-        cursor = Rectangle(width=0.16, height=0.3, color=WHITE,
+                          font=MONO, font_size=22, color=DIM_COLOR)
+        cursor = Rectangle(width=0.16, height=0.3, color=DIM_COLOR,
                            fill_opacity=0.9, stroke_width=0)
         if typed:
             cursor.next_to(line, RIGHT, buff=0.05)
@@ -350,7 +357,7 @@ class SmartBuryIntro(Scene):
         """
         return self.at_minibuffer(
             rich_text("[Repeat with: `M--`, `_`, `M-_`]", font_size=22,
-                      color=GRAY_A, font=MONO))
+                      color=DIM_COLOR, font=MONO))
 
     def build_frame(self) -> None:
         """The Emacs frame: the window, its mode line, and the minibuffer."""
@@ -370,14 +377,14 @@ class SmartBuryIntro(Scene):
         self.minibuffer = self.minibuffer_label()
 
     def build_side(self) -> None:
-        keys_title = Text("keys", font_size=22, color=GRAY_B)
+        keys_title = Text("keys", font_size=22, color=DIM_COLOR)
         self.keys_box = RoundedRectangle(corner_radius=0.15,
                                          width=KEYS_BOX_WIDTH, height=0.85,
                                          color=GRAY_B, stroke_width=3)
         self.keys_box.move_to(RIGHT * SIDE_X + UP * KEYS_Y)
         keys_title.next_to(self.keys_box, UP, buff=0.12)
         self.keys_panel = VGroup(keys_title, self.keys_box)
-        state_title = Text("Smart Bury state", font_size=22, color=GRAY_B)
+        state_title = Text("Smart Bury state", font_size=22, color=DIM_COLOR)
         state_title.move_to(RIGHT * SIDE_X + UP * (KEYS_Y - 1.25))
         self.counter_text = self.counter_label(self.sim.counter)
         self.state_panel = VGroup(state_title, self.counter_text)
@@ -389,7 +396,7 @@ class SmartBuryIntro(Scene):
 
     def say(self, text: str, wait: float = 1.5) -> None:
         """Replace the caption at the bottom (see `parse_rich' for TEXT)."""
-        new = rich_text(text, font_size=26)
+        new = rich_text(text, font_size=26, color=WHITE)  # captions: white
         if new.width > 13:
             new.scale_to_fit_width(13)
         new.move_to(UP * CAPTION_Y)
@@ -531,7 +538,7 @@ class SmartBuryIntro(Scene):
         self.sim.work()
         if expect is not None:
             self.expect(expect, "work")
-        typing = Text("typing…", font_size=24, color=GRAY_B, slant="ITALIC")
+        typing = Text("typing…", font_size=24, color=DIM_COLOR, slant="ITALIC")
         typing.move_to(self.keys_box)
         animations = self.keys_clear() + [
             FadeIn(typing),
@@ -584,7 +591,7 @@ class SmartBuryIntro(Scene):
 
     def title_card(self) -> None:
         title = Text("Smart Bury", font_size=72, weight="BOLD")
-        tagline = Text(TAGLINE, font_size=30, color=GRAY_B)
+        tagline = Text(TAGLINE, font_size=30, color=DIM_COLOR)
         VGroup(title, tagline).arrange(DOWN, buff=0.4)
         self.play(Write(title), FadeIn(tagline, shift=UP * 0.2))
         self.wait(2)
@@ -600,7 +607,7 @@ class SmartBuryIntro(Scene):
         desc = rich_text(description, font_size=24)
         if desc.width > 10:
             desc.scale_to_fit_width(10)
-        name = Text(symbol, font=MONO, font_size=20, color=YELLOW)
+        name = Text(symbol, font=MONO, font_size=20, color=NAME_COLOR)
         block = VGroup(desc, name).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
         return VGroup(keys_group, block).arrange(RIGHT, buff=0.45)
 
@@ -636,17 +643,17 @@ class SmartBuryIntro(Scene):
         rows.arrange(DOWN, aligned_edge=LEFT, buff=0.55).move_to(UP * 0.1)
         footer = VGroup(rich_text("With {repeat-mode}, continue with just "
                                   "`M--`, `_`, or `M-_`.", font_size=24,
-                                  color=GRAY_B))
+                                  color=DIM_COLOR))
         footer.move_to(DOWN * 2.9)
         self.show_card(heading, rows, footer, hold=3.5)
 
     def wrapped_row(self, vanilla: str, wrapper: str, note: str) -> VGroup:
-        arrow = Text("→", font_size=28, color=GRAY_B)
-        line = VGroup(Text(vanilla, font=MONO, font_size=26, color=WHITE),
+        arrow = Text("→", font_size=28, color=DIM_COLOR)
+        line = VGroup(Text(vanilla, font=MONO, font_size=26, color=DIM_COLOR),
                       arrow,
-                      Text(wrapper, font=MONO, font_size=26, color=YELLOW)
+                      Text(wrapper, font=MONO, font_size=26, color=NAME_COLOR)
                       ).arrange(RIGHT, buff=0.3)
-        hint = rich_text(note, font_size=20, color=GRAY_B)
+        hint = rich_text(note, font_size=20, color=DIM_COLOR)
         return VGroup(line, hint).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
 
     def wrapped_commands_card(self) -> None:
@@ -662,10 +669,10 @@ class SmartBuryIntro(Scene):
         rows.move_to(UP * 0.5)
         footer = VGroup(
             rich_text("They do their usual job, then continue the same "
-                      "~smart~ sequence.", font_size=26, color=WHITE),
+                      "~smart~ sequence.", font_size=26, color=DIM_COLOR),
             rich_text("The list is customizable: "
                       "{smart-bury-wrapped-commands}.", font_size=22,
-                      color=GRAY_B),
+                      color=DIM_COLOR),
         ).arrange(DOWN, buff=0.25).move_to(DOWN * 2.3)
         self.show_card(heading, rows, footer, hold=3)
 
@@ -695,7 +702,7 @@ class SmartBuryIntro(Scene):
         self.say("The window shows the ~current buffer~; "
                  "the minibuffer sits below it.", wait=0)
         minibuffer_hint = self.at_minibuffer(
-            Text("minibuffer", font_size=20, color=GRAY_B))
+            Text("minibuffer", font_size=20, color=DIM_COLOR))
         self.play(Create(self.frame_outline), FadeIn(self.mode_line),
                   FadeIn(self.mode_line_label),
                   Create(self.window_body, lag_ratio=0.2),
@@ -806,9 +813,9 @@ class SmartBuryIntro(Scene):
     def outro(self) -> None:
         self.clear_all()
         title = Text("Smart Bury", font_size=64, weight="BOLD")
-        tagline = Text(TAGLINE, font_size=28, color=GRAY_B)
+        tagline = Text(TAGLINE, font_size=28, color=DIM_COLOR)
         link = Text("github.com/pedrormjunior/smart-bury", font=MONO,
-                    font_size=26, color=GRAY_B)
+                    font_size=26, color=DIM_COLOR)
         VGroup(title, tagline, link).arrange(DOWN, buff=0.4)
         self.play(FadeIn(title, shift=UP * 0.2), FadeIn(tagline),
                   FadeIn(link))
