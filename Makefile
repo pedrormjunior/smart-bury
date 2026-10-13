@@ -33,11 +33,6 @@ package-lint:
 	            (require 'package-lint)))" \
 	  -f package-lint-batch-and-exit smart-bury.el
 
-# Manim reuses a cached partial movie per unchanged animation; its
-# default limit of 100 cached files is below the number of animations in
-# these scenes, so raise it.
-MANIM_CACHE = --max_files_cached 1000
-
 # The demo animation lives in demo/, a separate uv project (see
 # demo/pyproject.toml).  demo-check replays the README cases on the
 # Python model of the algorithm that drives the animation.
@@ -46,13 +41,13 @@ demo-check:
 
 # Fast, low-quality render (480p15) into demo/smart-bury-demo-preview.mp4.
 demo-preview: demo-check
-	cd demo && uv run manim -ql $(MANIM_CACHE) --media_dir media \
+	cd demo && uv run manim -ql --media_dir media \
 	  -o smart-bury-demo-preview smart_bury_demo.py SmartBuryDemo
 	cp demo/media/videos/smart_bury_demo/480p15/smart-bury-demo-preview.mp4 demo/
 
 # Final render (1080p60) into demo/smart-bury-demo.mp4.
 demo: demo-check
-	cd demo && uv run manim -qh $(MANIM_CACHE) --media_dir media \
+	cd demo && uv run manim -qh --media_dir media \
 	  -o smart-bury-demo smart_bury_demo.py SmartBuryDemo
 	cp demo/media/videos/smart_bury_demo/1080p60/smart-bury-demo.mp4 demo/
 
@@ -64,13 +59,13 @@ intro-check: demo-check
 
 # Fast, low-quality render (480p15) into demo/smart-bury-intro-preview.mp4.
 intro-preview: intro-check
-	cd demo && uv run manim -ql $(MANIM_CACHE) --media_dir media \
+	cd demo && uv run manim -ql --media_dir media \
 	  -o smart-bury-intro-preview smart_bury_intro.py SmartBuryIntro
 	cp demo/media/videos/smart_bury_intro/480p15/smart-bury-intro-preview.mp4 demo/
 
 # Final render (1080p60) into demo/smart-bury-intro.mp4.
 intro: intro-check
-	cd demo && uv run manim -qh $(MANIM_CACHE) --media_dir media \
+	cd demo && uv run manim -qh --media_dir media \
 	  -o smart-bury-intro smart_bury_intro.py SmartBuryIntro
 	cp demo/media/videos/smart_bury_intro/1080p60/smart-bury-intro.mp4 demo/
 
@@ -79,7 +74,7 @@ intro: intro-check
 # writes demo/smart-bury-intro-part.mp4.
 intro-part:
 	@test -n "$(N)" || { echo "usage: make intro-part N=START,END"; exit 1; }
-	cd demo && uv run manim -ql $(MANIM_CACHE) --media_dir media -n $(N) \
+	cd demo && uv run manim -ql --media_dir media -n $(N) \
 	  -o smart-bury-intro-part smart_bury_intro.py SmartBuryIntro
 	cp demo/media/videos/smart_bury_intro/480p15/smart-bury-intro-part.mp4 demo/
 

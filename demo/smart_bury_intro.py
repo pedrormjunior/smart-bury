@@ -49,12 +49,21 @@ from manim import (
     Write,
 )
 
-from smart_bury_demo import BACKGROUND, INITIAL_COLOR, MONO, BufferBox, color_of
+from smart_bury_demo import BACKGROUND, INITIAL_COLOR, MONO
 from smart_bury_sim import SMART_COMMANDS, SmartBury
 
 Text.set_default(font="Sans")
 
 BUFFERS = ["A", "B", "C", "D", "E"]
+# Rainbow colors, so the list's order is easy to follow (the long demo
+# keeps its own palette).
+COLORS = {
+    "A": "#e06c75",     # red
+    "B": "#e5a050",     # orange
+    "C": "#e5c07b",     # yellow
+    "D": "#98c379",     # green
+    "E": "#61afef",     # blue
+}
 OTHER_COLOR = GRAY_A
 PROMPT_COLOR = "#89b4fa"
 HIGHLIGHT = YELLOW.to_hex()
@@ -63,19 +72,22 @@ KEY_STROKE = GRAY_B
 TAGLINE = "Keep wanted buffers at the top of the “list of all buffers”"
 
 # Geometry (Manim's frame is about 14.2 x 8 units, centered on ORIGIN).
-FRAME_X = -1.5          # center of the Emacs frame and of the buffer list
-FRAME_WIDTH = 9.6
-FRAME_TOP = 1.5
-WINDOW_BOTTOM = -1.55
+MARGIN = 0.8            # left margin of the Emacs frame, and right margin
+FRAME_WIDTH = 8.2
+FRAME_X = -7.11 + MARGIN + FRAME_WIDTH / 2   # center of frame and list
+FRAME_TOP = 1.2
+WINDOW_BOTTOM = -1.65
 MODE_LINE_HEIGHT = 0.45
 MINIBUFFER_HEIGHT = 0.45
-SLOT_SPACING = 1.9
-LIST_TITLE_Y = 3.75
-LIST_Y = 2.9
-MARKER_LABEL_Y = 2.12
-INITIAL_Y = 1.78
-SIDE_X = 5.25
-CAPTION_Y = -3.25
+SLOT_SPACING = 1.65
+LIST_TITLE_Y = 3.45
+LIST_Y = 2.6
+MARKER_LABEL_Y = 1.82
+INITIAL_Y = 1.48
+KEYS_BOX_WIDTH = 3.4
+SIDE_X = 7.11 - MARGIN - KEYS_BOX_WIDTH / 2
+KEYS_Y = 0.2
+CAPTION_Y = -3.3
 KEYS_FONT_SIZE = 26
 KEYS_GAP = 0.12
 KEY_ROOM = 0.1   # extra room on each side of a key box in running text
@@ -145,10 +157,11 @@ def rich_text(text: str, font_size: float = 26, color=WHITE,
               font: str = "Sans") -> VGroup:
     """Render TEXT (see `parse_rich') as one line: VGroup(boxes, glyphs).
 
-    The text is rendered after an "Mg" strut, which gives the line's cap
-    height and descender, so every key box spans the same height and
-    keys keep their baseline: a lone `_' sits low in its box rather than
-    being centered like a dash.  The strut is then dropped.  Ligatures
+    The text is rendered after an "M" strut, which gives the line's
+    baseline and cap height, so every key box spans the same height, with
+    equal padding above the caps and below the baseline, and keys keep
+    their baseline: a lone `_' isn't centered like a dash.  Underscores
+    in keys are raised onto the baseline.  The strut is then dropped.  Ligatures
     are off, so each character maps to exactly one glyph.
 
     Glyphs are shifted to make KEY_ROOM on each side of every key, so
@@ -156,14 +169,15 @@ def rich_text(text: str, font_size: float = 26, color=WHITE,
     do this: in a monospace font every space is a full cell wide.)
     """
     plain, markup, keys = parse_rich(text)
-    strut = "Mg"
+    strut = "M"
     rendered = MarkupText(
         f'<span font_features="liga=0">{strut}{markup}</span>',
         font=font, font_size=font_size, color=color)
     if len(rendered.submobjects) != len(strut) + glyph_count(plain):
         raise ValueError(f"glyphs don't map to characters in {text!r}")
-    top = rendered[0].get_top()[1]
-    bottom = rendered[1].get_bottom()[1]
+    top = rendered[0].get_top()[1]          # cap height
+    baseline = rendered[0].get_bottom()[1]
+    pad = 0.3 * (top - baseline)
     spans = [(len(strut) + glyph_count(plain[:start]),
               len(strut) + glyph_count(plain[:end])) for start, end in keys]
     for first, last in spans:
@@ -171,21 +185,38 @@ def rich_text(text: str, font_size: float = 26, color=WHITE,
             glyph.shift(RIGHT * KEY_ROOM)
         for glyph in rendered[last:]:
             glyph.shift(RIGHT * KEY_ROOM)
+    # Underscores in keys sit on the baseline, like the other letters,
+    # rather than below it.
+    chars = [char for char in plain if not char.isspace()]
+    for first, last in spans:
+        for index in range(first, last):
+            if chars[index - len(strut)] == "_":
+                glyph = rendered[index]
+                glyph.shift(UP * (baseline - glyph.get_bottom()[1]))
     boxes = VGroup()
     for first, last in spans:
         glyphs = VGroup(*rendered[first:last])
         box = RoundedRectangle(corner_radius=0.06, width=glyphs.width + 0.16,
-                               height=top - bottom + 0.1, color=KEY_STROKE,
-                               stroke_width=1.5, fill_color=KEY_FILL,
-                               fill_opacity=1)
+                               height=top - baseline + 2 * pad,
+                               color=KEY_STROKE, stroke_width=1.5,
+                               fill_color=KEY_FILL, fill_opacity=1)
         boxes.add(box.move_to(RIGHT * glyphs.get_center()[0]
-                              + UP * (top + bottom) / 2))
+                              + UP * (top + baseline) / 2))
     return VGroup(boxes, VGroup(*rendered[len(strut):]))
 
 
 def key_box(keys: str, font_size: float = KEYS_FONT_SIZE) -> VGroup:
     """KEYS (e.g. "C-x M--") alone in a monospace key box."""
     return rich_text(f"`{keys}`", font_size=font_size, font=MONO)
+
+
+def buffer_box(name: str) -> VGroup:
+    """A buffer in the list: a rounded box in the buffer's color."""
+    box = RoundedRectangle(corner_radius=0.15, width=1.3, height=0.9,
+                           color=COLORS[name], stroke_width=4,
+                           fill_color=COLORS[name], fill_opacity=0.25)
+    label = Text(name, font=MONO, font_size=34, color=WHITE)
+    return VGroup(box, label.move_to(box))
 
 
 class SmartBuryIntro(Scene):
@@ -220,7 +251,7 @@ class SmartBuryIntro(Scene):
     # Building blocks
 
     def build_list(self) -> None:
-        self.boxes = {name: BufferBox(name).move_to(slot_position(index))
+        self.boxes = {name: buffer_box(name).move_to(slot_position(index))
                       for index, name in enumerate(self.sim.blist)}
         first, last = slot_position(0), slot_position(len(BUFFERS) - 1)
         title = Text("list of all buffers", font_size=22, color=GRAY_B)
@@ -266,7 +297,7 @@ class SmartBuryIntro(Scene):
             indent = rng.choice([0, 0, 0.5, 1.0])
             start = RIGHT * (left + indent) + UP * (top - 0.48 * i)
             lines.add(Line(start, start + RIGHT * width,
-                           color=color_of(name), stroke_width=6,
+                           color=COLORS[name], stroke_width=6,
                            stroke_opacity=0.55))
         return lines
 
@@ -289,14 +320,22 @@ class SmartBuryIntro(Scene):
         if not prompt:
             placeholder = Text("_", font=MONO, font_size=22).set_opacity(0)
             return self.at_minibuffer(VGroup(placeholder))
+        # Without input, an invisible "M" holds the cursor's cell, one
+        # space after the prompt's colon.
         line = MarkupText(f'<span foreground="{PROMPT_COLOR}">'
-                          f'{escape(prompt)}</span>{escape(typed)}',
+                          f'{escape(prompt)}</span>{escape(typed or "M")}',
                           font=MONO, font_size=22, color=WHITE)
         cursor = Rectangle(width=0.16, height=0.3, color=WHITE,
                            fill_opacity=0.9, stroke_width=0)
-        # Without input, the cursor sits after the prompt's final space.
-        space = Text("M", font=MONO, font_size=22).width
-        cursor.next_to(line, RIGHT, buff=0.05 if typed else space)
+        if typed:
+            cursor.next_to(line, RIGHT, buff=0.05)
+        else:
+            cell = line[-1]
+            cell.set_opacity(0)
+            cursor.move_to(cell.get_left() + RIGHT * cursor.width / 2
+                           + UP * (line[0].get_center()[1]
+                                   - cell.get_center()[1]))
+            cursor.set_y(line[0].get_center()[1])
         return self.at_minibuffer(VGroup(line, cursor))
 
     def repeat_message(self) -> VGroup:
@@ -329,20 +368,21 @@ class SmartBuryIntro(Scene):
 
     def build_side(self) -> None:
         keys_title = Text("keys", font_size=22, color=GRAY_B)
-        self.keys_box = RoundedRectangle(corner_radius=0.15, width=3.4,
-                                         height=0.85, color=GRAY_B,
-                                         stroke_width=3)
-        self.keys_box.move_to(RIGHT * SIDE_X + UP * 0.7)
+        self.keys_box = RoundedRectangle(corner_radius=0.15,
+                                         width=KEYS_BOX_WIDTH, height=0.85,
+                                         color=GRAY_B, stroke_width=3)
+        self.keys_box.move_to(RIGHT * SIDE_X + UP * KEYS_Y)
         keys_title.next_to(self.keys_box, UP, buff=0.12)
         self.keys_panel = VGroup(keys_title, self.keys_box)
         state_title = Text("Smart Bury state", font_size=22, color=GRAY_B)
-        state_title.move_to(RIGHT * SIDE_X + DOWN * 0.55)
+        state_title.move_to(RIGHT * SIDE_X + UP * (KEYS_Y - 1.25))
         self.counter_text = self.counter_label(self.sim.counter)
         self.state_panel = VGroup(state_title, self.counter_text)
 
     def counter_label(self, counter: int) -> Text:
         return Text(f"counter: {counter}", font=MONO, font_size=24,
-                    color=INITIAL_COLOR).move_to(RIGHT * SIDE_X + DOWN * 1.05)
+                    color=INITIAL_COLOR).move_to(RIGHT * SIDE_X
+                                                 + UP * (KEYS_Y - 1.75))
 
     def say(self, text: str, wait: float = 1.5) -> None:
         """Replace the caption at the bottom (see `parse_rich' for TEXT)."""
@@ -618,8 +658,8 @@ class SmartBuryIntro(Scene):
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.6)
         rows.move_to(UP * 0.5)
         footer = VGroup(
-            Text("They do their usual job, then continue the same smart "
-                 "sequence.", font_size=26, color=WHITE),
+            rich_text("They do their usual job, then continue the same "
+                      "~smart~ sequence.", font_size=26, color=WHITE),
             rich_text("The list is customizable: "
                       "{smart-bury-wrapped-commands}.", font_size=22,
                       color=GRAY_B),
