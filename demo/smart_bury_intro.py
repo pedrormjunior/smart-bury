@@ -24,6 +24,7 @@ from manim import (
     DOWN,
     LEFT,
     PI,
+    TAU,
     RIGHT,
     UP,
     GRAY_A,
@@ -46,6 +47,7 @@ from manim import (
     Transform,
     Triangle,
     VGroup,
+    Wiggle,
     Write,
 )
 
@@ -65,6 +67,9 @@ COLORS = {
     "E": "#b07ce8",     # violet (not blue, to stay apart from CURRENT_COLOR)
 }
 CURRENT_COLOR = "#00bfff"
+# The keys repeat-mode offers after a Smart Bury command, in the order of
+# the package's description (bury, switch through, switch to the other).
+REPEAT_KEYS = ["M--", "_", "M-_"]
 INITIAL_COLOR = "#ff9fbf"   # "initial" marker and counter
 OTHER_COLOR = GRAY_A
 PROMPT_COLOR = CURRENT_COLOR
@@ -355,8 +360,9 @@ class SmartBuryIntro(Scene):
         switch through, switch to the other buffer), in key boxes like
         Emacs' `help-key-binding' face.
         """
+        keys = ", ".join(f"`{key}`" for key in REPEAT_KEYS)
         return self.at_minibuffer(
-            rich_text("[Repeat with: `M--`, `_`, `M-_`]", font_size=22,
+            rich_text(f"[Repeat with: {keys}]", font_size=22,
                       color=DIM_COLOR, font=MONO))
 
     def build_frame(self) -> None:
@@ -487,10 +493,13 @@ class SmartBuryIntro(Scene):
                 .set_opacity(1))
 
     def update_stage(self, old: list[str], minibuffer: VGroup,
-                     run_time: float) -> None:
-        """Animate the model's new state: list, window, state, minibuffer."""
+                     run_time: float, extra: list | None = None) -> None:
+        """Animate the model's new state: list, window, state, minibuffer.
+
+        EXTRA animations, if any, play along with it.
+        """
         new = list(self.sim.blist)
-        animations = self.box_moves(old, new)
+        animations = self.box_moves(old, new) + list(extra or [])
         if new[0] != old[0]:
             animations += [
                 Transform(self.mode_line_label, self.mode_line_text(new[0])),
@@ -505,6 +514,37 @@ class SmartBuryIntro(Scene):
             ]
         animations.append(Transform(self.minibuffer, minibuffer))
         self.play(*animations, run_time=run_time)
+
+    def glow(self, key: VGroup) -> VGroup:
+        """Make KEY (a key box from `rich_text') glow in CURRENT_COLOR.
+
+        Its box's outline turns CURRENT_COLOR, and a soft halo follows
+        the box frame by frame, so it stays with the box while the box
+        slides or wiggles.  Returns the halo, for `glow_off'.
+        """
+        box = key[0][0]
+        box.set_stroke(CURRENT_COLOR, width=3)
+
+        def follow(halo):
+            halo.become(box.copy().set_fill(opacity=0).set_stroke(
+                CURRENT_COLOR, width=12,
+                opacity=0.35 * box.get_stroke_opacity()))
+
+        halo = box.copy()
+        follow(halo)
+        halo.add_updater(follow)
+        self.add(halo)
+        return halo
+
+    def glow_off(self, keys: list[VGroup], halos: list[VGroup]) -> None:
+        """Fade the glow of KEYS out: halos vanish, outlines turn back."""
+        for halo in halos:
+            halo.clear_updaters()
+        self.play(*(FadeOut(halo) for halo in halos),
+                  *(key[0][0].animate.set_stroke(KEY_STROKE, width=1.5)
+                    for key in keys),
+                  run_time=0.3)
+        self.remove(*halos)
 
     def press(self, keys: str, action, caption: str = "",
               expect: str | None = None, fast: bool = False) -> None:
@@ -521,14 +561,36 @@ class SmartBuryIntro(Scene):
         if (keys.startswith("C-x")
                 or self.sim.last_command not in SMART_COMMANDS):
             animations += self.keys_clear()
+        repeating = (keys in REPEAT_KEYS
+                     and self.sim.last_command in SMART_COMMANDS)
         animations += self.keys_push(keys)
+        glowing, halos, wiggles = [], [], []
+        if repeating:
+            # The minibuffer shows repeat-mode's message: the key pressed
+            # there, and its new box in the keys panel, glow and wiggle
+            # from the press through the step's animation.  In the
+            # minibuffer, a copy laid exactly over the key does it, so
+            # the message itself is untouched.
+            target = self.repeat_message()[0][REPEAT_KEYS.index(keys)]
+            overlay = key_box(keys, font_size=22)
+            overlay.shift(target.get_center() - overlay[0][0].get_center())
+            self.add(overlay)
+            for key in (overlay, self.key_boxes[-1]):
+                halos.append(self.glow(key))
+                glowing.append(key)
+                wiggles.append(Wiggle(key, scale_value=1.25,
+                                      rotation_angle=0.03 * TAU,
+                                      n_wiggles=4))
         self.play(*animations, run_time=0.25 if fast else 0.4)
         old = list(self.sim.blist)
         action()
         if expect is not None:
             self.expect(expect, keys)
         self.update_stage(old, self.repeat_message(),
-                          run_time=0.55 if fast else 1.0)
+                          run_time=0.55 if fast else 1.0, extra=wiggles)
+        if repeating:
+            self.glow_off(glowing, halos)
+            self.remove(glowing[0])    # the minibuffer's overlay
         self.wait(0.35 if fast else max(1.0, 0.15 * len(caption.split())))
 
     def work(self, caption: str, expect: str | None = None) -> None:
