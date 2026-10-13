@@ -58,13 +58,13 @@ intro-check: demo-check
 	cd demo && uv run manim --dry_run smart_bury_intro.py SmartBuryIntro
 
 # Fast, low-quality render (480p15) into demo/smart-bury-intro-preview.mp4.
-intro-preview: intro-check
+intro-preview: demo-check
 	cd demo && uv run manim -ql --media_dir media \
 	  -o smart-bury-intro-preview smart_bury_intro.py SmartBuryIntro
 	cp demo/media/videos/smart_bury_intro/480p15/smart-bury-intro-preview.mp4 demo/
 
 # Final render (1080p60) into demo/smart-bury-intro.mp4.
-intro: intro-check
+intro: demo-check
 	cd demo && uv run manim -qh --media_dir media \
 	  -o smart-bury-intro smart_bury_intro.py SmartBuryIntro
 	cp demo/media/videos/smart_bury_intro/1080p60/smart-bury-intro.mp4 demo/

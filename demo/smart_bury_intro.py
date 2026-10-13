@@ -58,14 +58,15 @@ BUFFERS = ["A", "B", "C", "D", "E"]
 # Rainbow colors, so the list's order is easy to follow (the long demo
 # keeps its own palette).
 COLORS = {
-    "A": "#e06c75",     # red
-    "B": "#e5a050",     # orange
-    "C": "#e5c07b",     # yellow
-    "D": "#98c379",     # green
-    "E": "#61afef",     # blue
+    "A": "#e8475f",     # red
+    "B": "#f5893b",     # orange
+    "C": "#f2d45c",     # yellow
+    "D": "#5cc96b",     # green
+    "E": "#b07ce8",     # violet (not blue, to stay apart from CURRENT_COLOR)
 }
+CURRENT_COLOR = "#00bfff"
 OTHER_COLOR = GRAY_A
-PROMPT_COLOR = "#89b4fa"
+PROMPT_COLOR = CURRENT_COLOR
 HIGHLIGHT = YELLOW.to_hex()
 KEY_FILL = GRAY_D
 KEY_STROKE = GRAY_B
@@ -75,15 +76,16 @@ TAGLINE = "Keep wanted buffers at the top of the “list of all buffers”"
 MARGIN = 0.8            # left margin of the Emacs frame, and right margin
 FRAME_WIDTH = 8.2
 FRAME_X = -7.11 + MARGIN + FRAME_WIDTH / 2   # center of frame and list
-FRAME_TOP = 1.2
-WINDOW_BOTTOM = -1.65
+# From top to bottom: the Emacs frame, the buffer list, the caption.
+FRAME_TOP = 3.5
+WINDOW_BOTTOM = 0.9
 MODE_LINE_HEIGHT = 0.45
 MINIBUFFER_HEIGHT = 0.45
 SLOT_SPACING = 1.65
-LIST_TITLE_Y = 3.45
-LIST_Y = 2.6
-MARKER_LABEL_Y = 1.82
-INITIAL_Y = 1.48
+LIST_TITLE_Y = -0.45
+LIST_Y = -1.3
+MARKER_LABEL_Y = -2.1
+INITIAL_Y = -2.44
 KEYS_BOX_WIDTH = 3.4
 SIDE_X = 7.11 - MARGIN - KEYS_BOX_WIDTH / 2
 KEYS_Y = 0.2
@@ -266,9 +268,10 @@ class SmartBuryIntro(Scene):
     def build_markers(self) -> None:
         """The fixed frames marking the current and the other buffer."""
         self.current_frame = RoundedRectangle(
-            corner_radius=0.2, width=1.55, height=1.15, color=YELLOW,
+            corner_radius=0.2, width=1.55, height=1.15, color=CURRENT_COLOR,
             stroke_width=5).move_to(slot_position(0))
-        self.current_label = Text("current", font_size=18, color=YELLOW)
+        self.current_label = Text("current", font_size=18,
+                                  color=CURRENT_COLOR)
         self.current_label.move_to(RIGHT * slot_position(0)[0]
                                    + UP * MARKER_LABEL_Y)
         self.other_frame = DashedVMobject(
