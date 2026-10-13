@@ -67,9 +67,10 @@ COLORS = {
     "E": "#b07ce8",     # violet (not blue, to stay apart from CURRENT_COLOR)
 }
 CURRENT_COLOR = "#00bfff"
-# The keys repeat-mode offers after a Smart Bury command, in the order of
-# the package's description (bury, switch through, switch to the other).
-REPEAT_KEYS = ["M--", "_", "M-_"]
+# The keys repeat-mode offers after a Smart Bury command, in the order its
+# real message lists them, which follows `smart-bury-keys' (switch
+# through, switch to the other buffer, bury).
+REPEAT_KEYS = ["_", "M-_", "M--"]
 INITIAL_COLOR = "#ff9fbf"   # "initial" marker and counter
 OTHER_COLOR = GRAY_A
 PROMPT_COLOR = CURRENT_COLOR
@@ -356,9 +357,8 @@ class SmartBuryIntro(Scene):
     def repeat_message(self) -> VGroup:
         """`repeat-mode's echo after a Smart Bury command.
 
-        The keys are in the order of the package's description (bury,
-        switch through, switch to the other buffer), in key boxes like
-        Emacs' `help-key-binding' face.
+        The keys are in REPEAT_KEYS's order, as in the real message, in
+        key boxes like Emacs' `help-key-binding' face.
         """
         keys = ", ".join(f"`{key}`" for key in REPEAT_KEYS)
         return self.at_minibuffer(
@@ -686,9 +686,6 @@ class SmartBuryIntro(Scene):
     def basic_commands_card(self) -> None:
         heading = self.card_heading("Three basic commands")
         rows = VGroup(
-            self.command_row("C-x M--",
-                             "Bury the ~current buffer~, and move on smartly.",
-                             "smart-bury-bury-buffer"),
             self.command_row("C-x _",
                              "Go to the ~other buffer~, then one deeper per "
                              "`_`, burying nothing.",
@@ -697,6 +694,9 @@ class SmartBuryIntro(Scene):
                              "Go back to where the sequence started, or to "
                              "the ~other buffer~.",
                              "smart-bury-switch-to-other-buffer"),
+            self.command_row("C-x M--",
+                             "Bury the ~current buffer~, and move on smartly.",
+                             "smart-bury-bury-buffer"),
         )
         # Align the key boxes in one column, and the descriptions in another.
         column = max(row[0].width for row in rows)
@@ -704,7 +704,7 @@ class SmartBuryIntro(Scene):
             row[1].next_to(row[0], RIGHT, buff=0.45 + column - row[0].width)
         rows.arrange(DOWN, aligned_edge=LEFT, buff=0.55).move_to(UP * 0.1)
         footer = VGroup(rich_text("With {repeat-mode}, continue with just "
-                                  "`M--`, `_`, or `M-_`.", font_size=24,
+                                  "`_`, `M-_`, or `M--`.", font_size=24,
                                   color=DIM_COLOR))
         footer.move_to(DOWN * 2.9)
         self.show_card(heading, rows, footer, hold=3.5)

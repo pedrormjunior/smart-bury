@@ -39,8 +39,6 @@ to “smartly” handle *two others* when switching buffers in a window.
 commands](#wrapping-other-commands).)
 
 The three basic (interactive) functions are:
-- `smart-bury-bury-buffer` — like `bury-buffer`, but “smart” (see why
-  below).
 - `smart-bury-switch-through-buffers` — equivalent to a
   `(switch-to-buffer (other-buffer))` call on *first call*, but goes
   on to the 3rd, 4th… buffer on successive immediate calls, *without
@@ -61,6 +59,8 @@ The three basic (interactive) functions are:
   successive and immediate calls to the previously described function
   will return the focus to the original buffer, keeping the “list of
   all buffers” as it was before starting *switching through buffers*.
+- `smart-bury-bury-buffer` — like `bury-buffer`, but “smart” (see why
+  below).
 
 The two other functions, handled by default, are `quit-window` and
 `kill-current-buffer`: `smart-bury-mode` remaps them to
@@ -81,15 +81,15 @@ directory on `load-path`, enable the mode and, as recommended,
   (repeat-mode 1))
 ```
 
-`smart-bury-mode` binds the keys `C-x M--`, `C-x _`, and `C-x M-_` to
+`smart-bury-mode` binds the keys `C-x _`, `C-x M-_`, and `C-x M--` to
 the three basic functions, respectively, and remaps the wrapped ones
 (see [Keys](#keys) to change them).
 
 **Note:** the mode’s default keys are **not** bound in vanilla Emacs.
 
 With `repeat-mode` enabled, any call to any of the three functions
-bound with the `C-x` prefix can simply be followed by `M--`, `_`, or
-`M-_`, respectively.  The same holds after an interactive call to any
+bound with the `C-x` prefix can simply be followed by `_`, `M-_`, or
+`M--`, respectively.  The same holds after an interactive call to any
 of the wrapped functions (e.g., `q` in a read-only buffer, if it is
 bound to `quit-window`): it also enables the *repeat map*, so
 *switching through buffers* can be done with fewer key presses.
@@ -167,14 +167,14 @@ plain `setq`, which skips the regeneration they trigger.
 The prefix `C-x` is configured in `smart-bury-prefix-key`, and the
 three keys following it in `smart-bury-keys`.  Each of those keys must
 be a single key, since it is also the key repeating its function under
-*repeat mode*.  For example, to use `C-c` with `b`, `n`, and `o`:
+*repeat mode*.  For example, to use `C-c` with `n`, `o`, and `b`:
 
 ```elisp
 (setopt smart-bury-prefix-key "C-c")
 (setopt smart-bury-keys
-        '((smart-bury-bury-buffer            . "b")
-          (smart-bury-switch-through-buffers . "n")
-          (smart-bury-switch-to-other-buffer . "o")))
+        '((smart-bury-switch-through-buffers . "n")
+          (smart-bury-switch-to-other-buffer . "o")
+          (smart-bury-bury-buffer            . "b")))
 ```
 
 The prefix may also be the empty string, to bind the keys directly

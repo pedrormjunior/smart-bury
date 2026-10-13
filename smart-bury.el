@@ -39,13 +39,13 @@
 ;;
 ;; It provides three basic commands:
 ;;
-;; - `smart-bury-bury-buffer': like `bury-buffer', but "smart".
 ;; - `smart-bury-switch-through-buffers': switch to the other buffer,
 ;;   then to the 3rd, 4th... on successive calls, keeping the relative
 ;;   order of the remaining buffers.
 ;; - `smart-bury-switch-to-other-buffer': switch back and forth between
 ;;   the current and the other buffer; after switching through buffers,
 ;;   it returns to the original one.
+;; - `smart-bury-bury-buffer': like `bury-buffer', but "smart".
 ;;
 ;; It also generates a `smart-bury-FN' wrapper for each command FN in
 ;; `smart-bury-wrapped-commands' (by default `quit-window' and
@@ -56,9 +56,9 @@
 ;;   (smart-bury-mode 1)
 ;;   (repeat-mode 1)
 ;;
-;; The mode binds `C-x M--', `C-x _', and `C-x M-_' to the three basic
+;; The mode binds `C-x _', `C-x M-_', and `C-x M--' to the three basic
 ;; commands and remaps the wrapped ones.  With `repeat-mode', each
-;; command can then be repeated with just `M--', `_', or `M-_'.  See
+;; command can then be repeated with just `_', `M-_', or `M--'.  See
 ;; `smart-bury-prefix-key' and `smart-bury-keys' to change the keys, and
 ;; README.md for full description and examples.
 
@@ -432,9 +432,9 @@ variable (e.g. via `setopt' or Customize) updates
   :set #'smart-bury--set-and-rebuild)
 
 (defcustom smart-bury-keys
-  '((smart-bury-bury-buffer            . "M--")
-    (smart-bury-switch-through-buffers . "_")
-    (smart-bury-switch-to-other-buffer . "M-_"))
+  '((smart-bury-switch-through-buffers . "_")
+    (smart-bury-switch-to-other-buffer . "M-_")
+    (smart-bury-bury-buffer            . "M--"))
   "Alist of (COMMAND . KEY) bound by `smart-bury-mode'.
 Each KEY, in `kbd' format, must be a single key: `smart-bury-mode' binds
 it after `smart-bury-prefix-key', and `smart-bury-repeat-map' binds it
