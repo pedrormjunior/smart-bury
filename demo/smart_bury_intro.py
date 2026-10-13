@@ -252,14 +252,14 @@ class SmartBuryIntro(Scene):
         self.stage()
         self.next_section("The vanilla way")
         self.vanilla_way()
-        self.next_section("Burying")
-        self.burying()
         self.next_section("Switching through")
         self.switching_through()
         self.next_section("Switching to the other buffer")
         self.switching_to_other()
         self.next_section("Breaking the sequence")
         self.breaking_the_sequence()
+        self.next_section("Burying")
+        self.burying()
         self.next_section("Outro")
         self.outro()
 
@@ -798,6 +798,10 @@ class SmartBuryIntro(Scene):
         self.say("…and keeps the list in order.", wait=1.8)
 
     def burying(self) -> None:
+        # Burying right away would continue the switching sequence (smart
+        # burying goes on from its depth); working first makes the buries
+        # a fresh sequence that cycles through every buffer.
+        self.work("Work on A for a while…", expect="ABCDE")
         self.press("C-x M--", self.sim.bury,
                    "`C-x M--` buries A: it goes to the end of the list, "
                    "and B shows.", expect="BCDEA")
@@ -848,17 +852,19 @@ class SmartBuryIntro(Scene):
                    expect="ABCDE")
 
     def breaking_the_sequence(self) -> None:
-        self.press("C-x _", self.sim.switch_through,
-                   "Without stopping, `C-x _` `_` `_` `_` goes four buffers "
-                   "deep, to E.", expect="BACDE", fast=True)
+        # repeat-mode is still active from the previous part, so a plain
+        # `_' continues the same key sequence.
+        self.press("_", self.sim.switch_through,
+                   "Without stopping, `_` `_` `_` goes three buffers deep, "
+                   "to D.", expect="BACDE", fast=True)
         self.press("_", self.sim.switch_through, expect="CABDE", fast=True)
-        self.press("_", self.sim.switch_through, expect="DABCE", fast=True)
-        self.press("_", self.sim.switch_through, expect="EABCD")
+        self.press("_", self.sim.switch_through, expect="DABCE")
         self.press("M-_", self.sim.switch_to_other,
                    "`M-_` goes back to A, with the list restored.",
                    expect="ABCDE")
-        self.press("C-x _", self.sim.switch_through,
-                   "Now `C-x _` `_` goes to C…", expect="BACDE", fast=True)
+        self.press("_", self.sim.switch_through,
+                   "Back on A, `_` `_` starts over, to C…", expect="BACDE",
+                   fast=True)
         self.press("_", self.sim.switch_through, expect="CABDE")
         self.work("…and we work on C for a while, which ends the sequence.",
                   expect="CABDE")
@@ -866,9 +872,11 @@ class SmartBuryIntro(Scene):
                    "So `C-x _` `_` starts a new sequence from C: two deep is "
                    "now B.", expect="ACBDE", fast=True)
         self.press("_", self.sim.switch_through, expect="BCADE")
-        self.press("M-_", self.sim.switch_to_other,
-                   "`M-_` returns to C, where the new sequence started.",
-                   expect="CABDE")
+        self.work("We work on B for a while too…", expect="BCADE")
+        self.press("C-x _", self.sim.switch_through,
+                   "…and `C-x _` `_` from B, two deep, is A: the list is back "
+                   "in order.", expect="CBADE", fast=True)
+        self.press("_", self.sim.switch_through, expect="ABCDE")
         self.say("Any other command starts a new sequence, "
                  "from wherever we are.", wait=2.5)
 
