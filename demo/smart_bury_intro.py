@@ -49,6 +49,7 @@ from manim import (
     VGroup,
     Wiggle,
     Write,
+    there_and_back,
 )
 
 from smart_bury_demo import MONO
@@ -548,6 +549,18 @@ class SmartBuryIntro(Scene):
                   run_time=0.3)
         self.remove(*halos)
 
+    def message_key(self, key: str) -> VGroup:
+        """A copy of repeat-mode message's KEY box, laid exactly over it.
+
+        Animating the copy (glow, wiggle) leaves the message untouched;
+        the copy is removed afterward.
+        """
+        target = self.repeat_message()[0][REPEAT_KEYS.index(key)]
+        overlay = key_box(key, font_size=22)
+        overlay.shift(target.get_center() - overlay[0][0].get_center())
+        self.add(overlay)
+        return overlay
+
     def press(self, keys: str, action, caption: str = "",
               expect: str | None = None, fast: bool = False) -> None:
         """Press KEYS, run the model's ACTION, and animate the result.
@@ -573,10 +586,7 @@ class SmartBuryIntro(Scene):
             # from the press through the step's animation.  In the
             # minibuffer, a copy laid exactly over the key does it, so
             # the message itself is untouched.
-            target = self.repeat_message()[0][REPEAT_KEYS.index(keys)]
-            overlay = key_box(keys, font_size=22)
-            overlay.shift(target.get_center() - overlay[0][0].get_center())
-            self.add(overlay)
+            overlay = self.message_key(keys)
             for key in (overlay, self.key_boxes[-1]):
                 halos.append(self.glow(key))
                 glowing.append(key)
@@ -593,7 +603,22 @@ class SmartBuryIntro(Scene):
         if repeating:
             self.glow_off(glowing, halos)
             self.remove(glowing[0])    # the minibuffer's overlay
-        self.wait(0.35 if fast else max(1.0, 0.15 * len(caption.split())))
+        wait = 0.35 if fast else max(1.0, 0.15 * len(caption.split()))
+        suffix = keys.split()[-1]
+        if keys.startswith("C-x ") and suffix in REPEAT_KEYS:
+            # repeat-mode's message has just appeared: highlight the key
+            # that repeats this command (the part after the prefix),
+            # during the wait that follows anyway.
+            overlay = self.message_key(suffix)
+            halo = self.glow(overlay)
+            self.play(Wiggle(overlay, scale_value=1.25,
+                             rotation_angle=0.03 * TAU, n_wiggles=4),
+                      run_time=0.9)
+            self.glow_off([overlay], [halo])
+            self.remove(overlay)
+            wait = max(0.0, wait - 1.2)
+        if wait > 0:
+            self.wait(wait)
 
     def work(self, caption: str, expect: str | None = None) -> None:
         """Any other command (e.g. typing), which ends the sequence and
@@ -602,10 +627,11 @@ class SmartBuryIntro(Scene):
         self.sim.work()
         if expect is not None:
             self.expect(expect, "work")
-        # "typing…" appears in the window, in place of its first line.
+        # "typing…" appears in the window, in place of its first line, and
+        # the whole Emacs frame briefly swells: the sequence is broken.
         line = self.window_body[0]
-        typing = Text("typing…", font_size=24, slant="ITALIC",
-                      color=COLORS[self.sim.current])
+        typing = Text("typing…", font_size=32, slant="ITALIC",
+                      color=DIM_COLOR)
         typing.move_to(line.get_start(), aligned_edge=LEFT)
         animations = self.keys_clear() + [
             line.animate.set_stroke(opacity=0),
@@ -614,8 +640,13 @@ class SmartBuryIntro(Scene):
         ]
         if self.state_visible:
             animations.append(self.initial_marker.animate.set_opacity(0))
-        self.play(*animations, run_time=0.8)
-        self.wait(0.9)
+        self.play(*animations, run_time=0.6)
+        frame = VGroup(self.frame_outline, self.mode_line,
+                       self.mode_line_label, self.window_body,
+                       self.minibuffer, typing)
+        self.play(frame.animate(rate_func=there_and_back).scale(1.04),
+                  run_time=0.7)
+        self.wait(0.4)
         self.play(FadeOut(typing), line.animate.set_stroke(opacity=LINE_OPACITY),
                   run_time=0.4)
 
@@ -768,7 +799,7 @@ class SmartBuryIntro(Scene):
         self.play(Create(self.other_frame), FadeIn(self.other_label))
         self.wait(1.2)
 
-        self.say("The window shows the ~current buffer~; "
+        self.say("(The window shows the ~current buffer~; "
                  "the minibuffer sits below it.", wait=0)
         minibuffer_hint = self.at_minibuffer(
             Text("minibuffer", font_size=20, color=DIM_COLOR))
@@ -782,7 +813,7 @@ class SmartBuryIntro(Scene):
                            scale_factor=1.25), run_time=1.2)
         self.play(FadeOut(minibuffer_hint))
 
-        self.say("Keys pressed appear on the right.", wait=0)
+        self.say("Keys pressed appear on the right.)", wait=0)
         self.play(FadeIn(self.keys_panel))
         self.wait(1)
 
