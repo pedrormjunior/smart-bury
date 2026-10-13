@@ -18,6 +18,7 @@ smart_bury_demo.py; this file reuses a few of its pieces unchanged.
 from __future__ import annotations
 
 import random
+from xml.sax.saxutils import escape
 
 from manim import (
     DOWN,
@@ -37,6 +38,7 @@ from manim import (
     FadeOut,
     Indicate,
     Line,
+    MarkupText,
     Rectangle,
     RoundedRectangle,
     Scene,
@@ -55,10 +57,9 @@ Text.set_default(font="Sans")
 BUFFERS = ["A", "B", "C", "D", "E"]
 OTHER_COLOR = GRAY_A
 PROMPT_COLOR = "#89b4fa"
-# The keys `repeat-mode' offers after any Smart Bury command, in the
-# order of the package's description (bury, switch through, switch to
-# the other buffer).
-REPEAT_KEYS = ["M--", "_", "M-_"]
+HIGHLIGHT = YELLOW.to_hex()
+KEY_FILL = GRAY_D
+KEY_STROKE = GRAY_B
 TAGLINE = "Keep wanted buffers at the top of the “list of all buffers”"
 
 # Geometry (Manim's frame is about 14.2 x 8 units, centered on ORIGIN).
@@ -75,6 +76,9 @@ MARKER_LABEL_Y = 2.12
 INITIAL_Y = 1.78
 SIDE_X = 5.25
 CAPTION_Y = -3.25
+KEYS_FONT_SIZE = 26
+KEYS_GAP = 0.12
+KEY_ROOM = 0.1   # extra room on each side of a key box in running text
 
 
 def slot_position(index: int):
@@ -91,12 +95,106 @@ def minibuffer_y() -> float:
     return WINDOW_BOTTOM - MODE_LINE_HEIGHT - MINIBUFFER_HEIGHT / 2
 
 
+# Rich text: key boxes, italics, and highlighted symbols
+
+def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
+    """Parse TEXT's markup into plain text, Pango markup, and key spans.
+
+    `KEYS` is a key (or key sequence) drawn in a monospace key box,
+    ~TEXT~ is italic, and {SYMBOL} is a monospace symbol in the
+    highlight color.  The key spans are (start, end) offsets into the
+    plain text.
+    """
+    plain, markup, keys = "", "", []
+    italic = False
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if char == "`":
+            end = text.index("`", i + 1)
+            key = text[i + 1:end]
+            keys.append((len(plain), len(plain) + len(key)))
+            plain += key
+            markup += (f'<span font_family="{MONO}" foreground="#FFFFFF">'
+                       f'{escape(key)}</span>')
+            i = end + 1
+        elif char == "{":
+            end = text.index("}", i + 1)
+            symbol = text[i + 1:end]
+            plain += symbol
+            markup += (f'<span font_family="{MONO}" foreground="{HIGHLIGHT}">'
+                       f'{escape(symbol)}</span>')
+            i = end + 1
+        elif char == "~":
+            markup += "</i>" if italic else "<i>"
+            italic = not italic
+            i += 1
+        else:
+            plain += char
+            markup += escape(char)
+            i += 1
+    return plain, markup, keys
+
+
+def glyph_count(text: str) -> int:
+    """How many glyphs TEXT renders to: one per non-blank character."""
+    return sum(1 for char in text if not char.isspace())
+
+
+def rich_text(text: str, font_size: float = 26, color=WHITE,
+              font: str = "Sans") -> VGroup:
+    """Render TEXT (see `parse_rich') as one line: VGroup(boxes, glyphs).
+
+    The text is rendered after an "Mg" strut, which gives the line's cap
+    height and descender, so every key box spans the same height and
+    keys keep their baseline: a lone `_' sits low in its box rather than
+    being centered like a dash.  The strut is then dropped.  Ligatures
+    are off, so each character maps to exactly one glyph.
+
+    Glyphs are shifted to make KEY_ROOM on each side of every key, so
+    neighboring text stays clear of its box.  (A space character can't
+    do this: in a monospace font every space is a full cell wide.)
+    """
+    plain, markup, keys = parse_rich(text)
+    strut = "Mg"
+    rendered = MarkupText(
+        f'<span font_features="liga=0">{strut}{markup}</span>',
+        font=font, font_size=font_size, color=color)
+    if len(rendered.submobjects) != len(strut) + glyph_count(plain):
+        raise ValueError(f"glyphs don't map to characters in {text!r}")
+    top = rendered[0].get_top()[1]
+    bottom = rendered[1].get_bottom()[1]
+    spans = [(len(strut) + glyph_count(plain[:start]),
+              len(strut) + glyph_count(plain[:end])) for start, end in keys]
+    for first, last in spans:
+        for glyph in rendered[first:]:
+            glyph.shift(RIGHT * KEY_ROOM)
+        for glyph in rendered[last:]:
+            glyph.shift(RIGHT * KEY_ROOM)
+    boxes = VGroup()
+    for first, last in spans:
+        glyphs = VGroup(*rendered[first:last])
+        box = RoundedRectangle(corner_radius=0.06, width=glyphs.width + 0.16,
+                               height=top - bottom + 0.1, color=KEY_STROKE,
+                               stroke_width=1.5, fill_color=KEY_FILL,
+                               fill_opacity=1)
+        boxes.add(box.move_to(RIGHT * glyphs.get_center()[0]
+                              + UP * (top + bottom) / 2))
+    return VGroup(boxes, VGroup(*rendered[len(strut):]))
+
+
+def key_box(keys: str, font_size: float = KEYS_FONT_SIZE) -> VGroup:
+    """KEYS (e.g. "C-x M--") alone in a monospace key box."""
+    return rich_text(f"`{keys}`", font_size=font_size, font=MONO)
+
+
 class SmartBuryIntro(Scene):
     def construct(self) -> None:
         self.camera.background_color = BACKGROUND
         self.sim = SmartBury(BUFFERS)
-        self.key_sequence: list[str] = []
-        self.caption: Text | None = None
+        self.key_boxes: list[VGroup] = []
+        self.caption: VGroup | None = None
+        self.state_visible = False
 
         self.next_section("Title")
         self.title_card()
@@ -106,7 +204,6 @@ class SmartBuryIntro(Scene):
         self.wrapped_commands_card()
         self.next_section("Stage")
         self.stage()
-        self.state_visible = False
         self.next_section("The vanilla way")
         self.vanilla_way()
         self.next_section("Burying")
@@ -178,51 +275,40 @@ class SmartBuryIntro(Scene):
         text.move_to(self.mode_line, aligned_edge=LEFT)
         return text.shift(RIGHT * 0.3)
 
+    def at_minibuffer(self, mobject):
+        return mobject.move_to(RIGHT * (frame_left() + 0.3)
+                               + UP * minibuffer_y(), aligned_edge=LEFT)
+
     def minibuffer_label(self, prompt: str = "", typed: str = "") -> VGroup:
         """The minibuffer's contents: PROMPT, then TYPED and a cursor.
 
+        Prompt and input are one text, so the space between them is kept.
         Empty, it is an invisible placeholder glyph rather than nothing,
         so that transforming from it doesn't start from a stray point.
         """
         if not prompt:
             placeholder = Text("_", font=MONO, font_size=22).set_opacity(0)
-            return VGroup(placeholder).move_to(
-                RIGHT * (frame_left() + 0.3) + UP * minibuffer_y(),
-                aligned_edge=LEFT)
-        parts = VGroup(Text(prompt, font=MONO, font_size=22,
-                            color=PROMPT_COLOR))
-        if typed:
-            parts.add(Text(typed, font=MONO, font_size=22, color=WHITE))
-        parts.arrange(RIGHT, buff=0.15)
+            return self.at_minibuffer(VGroup(placeholder))
+        line = MarkupText(f'<span foreground="{PROMPT_COLOR}">'
+                          f'{escape(prompt)}</span>{escape(typed)}',
+                          font=MONO, font_size=22, color=WHITE)
         cursor = Rectangle(width=0.16, height=0.3, color=WHITE,
                            fill_opacity=0.9, stroke_width=0)
-        cursor.next_to(parts, RIGHT, buff=0.05)
-        return VGroup(*parts, cursor).move_to(
-            RIGHT * (frame_left() + 0.3) + UP * minibuffer_y(),
-            aligned_edge=LEFT)
+        # Without input, the cursor sits after the prompt's final space.
+        space = Text("M", font=MONO, font_size=22).width
+        cursor.next_to(line, RIGHT, buff=0.05 if typed else space)
+        return self.at_minibuffer(VGroup(line, cursor))
 
     def repeat_message(self) -> VGroup:
-        """`repeat-mode's echo: [Repeat with: M--, _, M-_].
+        """`repeat-mode's echo after a Smart Bury command.
 
-        The keys are drawn like Emacs' `help-key-binding' face, a small
-        box around each key.
+        The keys are in the order of the package's description (bury,
+        switch through, switch to the other buffer), in key boxes like
+        Emacs' `help-key-binding' face.
         """
-        parts = VGroup(Text("[Repeat with:", font=MONO, font_size=22,
-                            color=GRAY_A))
-        for index, key in enumerate(REPEAT_KEYS):
-            label = Text(key, font=MONO, font_size=22, color=WHITE)
-            chip = RoundedRectangle(corner_radius=0.06,
-                                    width=label.width + 0.18,
-                                    height=0.34, color=GRAY_B,
-                                    stroke_width=1.5, fill_color=GRAY_D,
-                                    fill_opacity=1)
-            parts.add(VGroup(chip, label.move_to(chip)))
-            if index < len(REPEAT_KEYS) - 1:
-                parts.add(Text(",", font=MONO, font_size=22, color=GRAY_A))
-        parts.add(Text("]", font=MONO, font_size=22, color=GRAY_A))
-        parts.arrange(RIGHT, buff=0.12)
-        return parts.move_to(RIGHT * (frame_left() + 0.3) + UP * minibuffer_y(),
-                             aligned_edge=LEFT)
+        return self.at_minibuffer(
+            rich_text("[Repeat with: `M--`, `_`, `M-_`]", font_size=22,
+                      color=GRAY_A, font=MONO))
 
     def build_frame(self) -> None:
         """The Emacs frame: the window, its mode line, and the minibuffer."""
@@ -248,29 +334,19 @@ class SmartBuryIntro(Scene):
                                          stroke_width=3)
         self.keys_box.move_to(RIGHT * SIDE_X + UP * 0.7)
         keys_title.next_to(self.keys_box, UP, buff=0.12)
-        self.keys_text = self.keys_label("")
-        self.keys_panel = VGroup(keys_title, self.keys_box, self.keys_text)
+        self.keys_panel = VGroup(keys_title, self.keys_box)
         state_title = Text("Smart Bury state", font_size=22, color=GRAY_B)
         state_title.move_to(RIGHT * SIDE_X + DOWN * 0.55)
         self.counter_text = self.counter_label(self.sim.counter)
         self.state_panel = VGroup(state_title, self.counter_text)
 
-    def keys_label(self, keys: str) -> Text:
-        # An empty label is an invisible placeholder glyph (see
-        # `minibuffer_label').
-        label = Text(keys or "_", font=MONO, font_size=30, color=WHITE)
-        if label.width > self.keys_box.width - 0.4:
-            label.scale_to_fit_width(self.keys_box.width - 0.4)
-        label.move_to(self.keys_box)
-        return label if keys else label.set_opacity(0)
-
     def counter_label(self, counter: int) -> Text:
         return Text(f"counter: {counter}", font=MONO, font_size=24,
-                    color=WHITE).move_to(RIGHT * SIDE_X + DOWN * 1.05)
+                    color=INITIAL_COLOR).move_to(RIGHT * SIDE_X + DOWN * 1.05)
 
     def say(self, text: str, wait: float = 1.5) -> None:
-        """Replace the caption at the bottom of the frame."""
-        new = Text(text, font_size=26, color=WHITE)
+        """Replace the caption at the bottom (see `parse_rich' for TEXT)."""
+        new = rich_text(text, font_size=26)
         if new.width > 13:
             new.scale_to_fit_width(13)
         new.move_to(UP * CAPTION_Y)
@@ -291,6 +367,46 @@ class SmartBuryIntro(Scene):
                 f"storyboard step {what!r}: expected {order}, "
                 f"the model gives {actual}")
 
+    # The keys panel: one key box per press, appended on the right
+
+    def keys_push(self, keys: str) -> list:
+        """Animations appending a key box for KEYS to the keys panel.
+
+        The boxes already there slide left to make room, and those
+        pushed past the panel's left edge fade out.
+        """
+        new = key_box(keys)
+        boxes = self.key_boxes + [new]
+        right = self.keys_box.get_right()[0] - 0.2
+        left_limit = self.keys_box.get_left()[0] + 0.2
+        y = self.keys_box.get_center()[1]
+        targets, x = [], right
+        for box in reversed(boxes):
+            targets.append(x - box.width / 2)
+            x -= box.width + KEYS_GAP
+        targets.reverse()
+        animations, kept = [], []
+        for box, target in zip(boxes, targets):
+            fits = target - box.width / 2 >= left_limit
+            if box is new:
+                box.move_to(RIGHT * target + UP * y)
+                animations.append(FadeIn(box, shift=LEFT * 0.4))
+                kept.append(box)
+            elif fits:
+                animations.append(box.animate.move_to(RIGHT * target
+                                                      + UP * y))
+                kept.append(box)
+            else:
+                animations.append(FadeOut(box, shift=LEFT * 0.4))
+        self.key_boxes = kept
+        return animations
+
+    def keys_clear(self) -> list:
+        """Animations removing every key box from the keys panel."""
+        animations = [FadeOut(box) for box in self.key_boxes]
+        self.key_boxes = []
+        return animations
+
     # Animating the model
 
     def box_moves(self, old: list[str], new: list[str]) -> list:
@@ -309,11 +425,6 @@ class SmartBuryIntro(Scene):
             moves.append(self.boxes[name].animate(path_arc=arc)
                          .move_to(slot_position(new.index(name))))
         return moves
-
-    def show_keys(self, run_time: float = 0.4) -> None:
-        keys = " ".join(self.key_sequence[-6:])
-        self.play(Transform(self.keys_text, self.keys_label(keys)),
-                  run_time=run_time)
 
     def initial_marker_target(self, visible: bool):
         """Put the "initial" marker under the initial buffer's box."""
@@ -349,17 +460,19 @@ class SmartBuryIntro(Scene):
               expect: str | None = None, fast: bool = False) -> None:
         """Press KEYS, run the model's ACTION, and animate the result.
 
-        KEYS continue the key sequence on display unless the previous
-        command was not a Smart Bury one, in which case they start it.
-        EXPECT, if given, is the buffer order the storyboard expects.
+        KEYS are appended to the keys panel, unless they start with C-x
+        or the previous command was not a Smart Bury one, in which case
+        they start a new key sequence there.  EXPECT, if given, is the
+        buffer order the storyboard expects.
         """
         if caption:
             self.say(caption, wait=0.25 if fast else 0.5)
+        animations = []
         if (keys.startswith("C-x")
                 or self.sim.last_command not in SMART_COMMANDS):
-            self.key_sequence = []
-        self.key_sequence.append(keys)
-        self.show_keys(run_time=0.2 if fast else 0.35)
+            animations += self.keys_clear()
+        animations += self.keys_push(keys)
+        self.play(*animations, run_time=0.25 if fast else 0.4)
         old = list(self.sim.blist)
         action()
         if expect is not None:
@@ -375,17 +488,18 @@ class SmartBuryIntro(Scene):
         self.sim.work()
         if expect is not None:
             self.expect(expect, "work")
-        self.key_sequence = []
-        animations = [Transform(self.keys_text,
-                                self.keys_label("…typing…")),
-                      Indicate(self.window_body, color=WHITE,
-                               scale_factor=1.03),
-                      Transform(self.minibuffer, self.minibuffer_label())]
+        typing = Text("typing…", font_size=24, color=GRAY_B, slant="ITALIC")
+        typing.move_to(self.keys_box)
+        animations = self.keys_clear() + [
+            FadeIn(typing),
+            Indicate(self.window_body, color=WHITE, scale_factor=1.03),
+            Transform(self.minibuffer, self.minibuffer_label()),
+        ]
         if self.state_visible:
             animations.append(self.initial_marker.animate.set_opacity(0))
         self.play(*animations, run_time=0.8)
         self.wait(0.7)
-        self.show_keys(run_time=0.3)
+        self.play(FadeOut(typing), run_time=0.3)
 
     def switch_to_buffer(self, name: str, caption: str = "",
                          expect: str | None = None,
@@ -399,21 +513,17 @@ class SmartBuryIntro(Scene):
             self.say(caption, wait=0.25 if fast else 0.5)
         default = self.sim.other
         prompt = f"Switch to buffer (default {default}): "
-        self.key_sequence = ["C-x b"]
-        self.play(Transform(self.keys_text, self.keys_label("C-x b")),
+        self.play(*self.keys_clear(), *self.keys_push("C-x b"),
                   Transform(self.minibuffer, self.minibuffer_label(prompt)),
                   run_time=0.3 if fast else 0.45)
         self.wait(0.2 if fast else 0.45)
         if name != default:
-            self.key_sequence.append(name)
-            self.play(Transform(self.keys_text,
-                                self.keys_label(f"C-x b {name}")),
+            self.play(*self.keys_push(name),
                       Transform(self.minibuffer,
                                 self.minibuffer_label(prompt, name)),
                       run_time=0.25 if fast else 0.35)
             self.wait(0.2 if fast else 0.35)
-        self.key_sequence.append("RET")
-        self.show_keys(run_time=0.2 if fast else 0.3)
+        self.play(*self.keys_push("RET"), run_time=0.2 if fast else 0.3)
         old = list(self.sim.blist)
         self.sim.switch_to_buffer(name)
         if expect is not None:
@@ -423,11 +533,11 @@ class SmartBuryIntro(Scene):
         self.wait(0.35 if fast else 1.0)
 
     # Cards
-    # Cards
 
     def clear_all(self) -> None:
         self.play(*(FadeOut(mobject) for mobject in self.mobjects))
         self.caption = None
+        self.key_boxes = []
 
     def title_card(self) -> None:
         title = Text("Smart Bury", font_size=72, weight="BOLD")
@@ -442,17 +552,14 @@ class SmartBuryIntro(Scene):
 
     def command_row(self, keys: str, description: str,
                     symbol: str) -> VGroup:
-        """A key chip, then a description over the command's name."""
-        key_text = Text(keys, font=MONO, font_size=30, color=WHITE)
-        chip = RoundedRectangle(corner_radius=0.15, width=2.4, height=0.8,
-                                color=YELLOW, stroke_width=3)
-        key_text.move_to(chip)
-        desc = Text(description, font_size=24, color=WHITE)
+        """A key box, then a description over the command's name."""
+        keys_group = key_box(keys, font_size=30)
+        desc = rich_text(description, font_size=24)
         if desc.width > 10:
             desc.scale_to_fit_width(10)
-        name = Text(symbol, font=MONO, font_size=20, color=GRAY_B)
+        name = Text(symbol, font=MONO, font_size=20, color=YELLOW)
         block = VGroup(desc, name).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
-        return VGroup(VGroup(chip, key_text), block).arrange(RIGHT, buff=0.45)
+        return VGroup(keys_group, block).arrange(RIGHT, buff=0.45)
 
     def show_card(self, heading: Text, rows: VGroup, footer: VGroup,
                   hold: float) -> None:
@@ -468,20 +575,25 @@ class SmartBuryIntro(Scene):
         heading = self.card_heading("Three basic commands")
         rows = VGroup(
             self.command_row("C-x M--",
-                             "Bury the current buffer, and move on smartly.",
+                             "Bury the ~current buffer~, and move on smartly.",
                              "smart-bury-bury-buffer"),
             self.command_row("C-x _",
-                             "Go to the other buffer, then one deeper per _,"
-                             " burying nothing.",
+                             "Go to the ~other buffer~, then one deeper per "
+                             "`_`, burying nothing.",
                              "smart-bury-switch-through-buffers"),
             self.command_row("C-x M-_",
-                             "Go back to where the sequence started,"
-                             " or to the other buffer.",
+                             "Go back to where the sequence started, or to "
+                             "the ~other buffer~.",
                              "smart-bury-switch-to-other-buffer"),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.55)
-        rows.move_to(UP * 0.1)
-        footer = VGroup(Text("With repeat-mode, continue with just "
-                             "M--, _, or M-_.", font_size=24, color=GRAY_B))
+        )
+        # Align the key boxes in one column, and the descriptions in another.
+        column = max(row[0].width for row in rows)
+        for row in rows:
+            row[1].next_to(row[0], RIGHT, buff=0.45 + column - row[0].width)
+        rows.arrange(DOWN, aligned_edge=LEFT, buff=0.55).move_to(UP * 0.1)
+        footer = VGroup(rich_text("With {repeat-mode}, continue with just "
+                                  "`M--`, `_`, or `M-_`.", font_size=24,
+                                  color=GRAY_B))
         footer.move_to(DOWN * 2.9)
         self.show_card(heading, rows, footer, hold=3.5)
 
@@ -491,14 +603,15 @@ class SmartBuryIntro(Scene):
                       arrow,
                       Text(wrapper, font=MONO, font_size=26, color=YELLOW)
                       ).arrange(RIGHT, buff=0.3)
-        hint = Text(note, font_size=20, color=GRAY_B)
+        hint = rich_text(note, font_size=20, color=GRAY_B)
         return VGroup(line, hint).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
 
     def wrapped_commands_card(self) -> None:
         heading = self.card_heading("Wrapped commands")
         rows = VGroup(
             self.wrapped_row("quit-window", "smart-bury-quit-window",
-                             "e.g. q in read-only buffers such as *Messages*"),
+                             "e.g. `q` in read-only buffers such as "
+                             "*Messages*"),
             self.wrapped_row("kill-current-buffer",
                              "smart-bury-kill-current-buffer",
                              "on whatever key it is bound to"),
@@ -507,8 +620,9 @@ class SmartBuryIntro(Scene):
         footer = VGroup(
             Text("They do their usual job, then continue the same smart "
                  "sequence.", font_size=26, color=WHITE),
-            Text("The list is customizable: smart-bury-wrapped-commands.",
-                 font_size=22, color=GRAY_B),
+            rich_text("The list is customizable: "
+                      "{smart-bury-wrapped-commands}.", font_size=22,
+                      color=GRAY_B),
         ).arrange(DOWN, buff=0.25).move_to(DOWN * 2.3)
         self.show_card(heading, rows, footer, hold=3)
 
@@ -529,17 +643,16 @@ class SmartBuryIntro(Scene):
                   FadeIn(self.list_labels))
         self.wait(0.8)
 
-        self.say("The first is the current buffer; "
-                 "the second is the other buffer.", wait=0)
+        self.say("The first is the ~current buffer~; "
+                 "the second is the ~other buffer~.", wait=0)
         self.play(Create(self.current_frame), FadeIn(self.current_label))
         self.play(Create(self.other_frame), FadeIn(self.other_label))
         self.wait(1.2)
 
-        self.say("The window shows the current buffer; "
+        self.say("The window shows the ~current buffer~; "
                  "the minibuffer sits below it.", wait=0)
-        minibuffer_hint = Text("minibuffer", font_size=20, color=GRAY_B)
-        minibuffer_hint.move_to(RIGHT * (frame_left() + 0.3)
-                                + UP * minibuffer_y(), aligned_edge=LEFT)
+        minibuffer_hint = self.at_minibuffer(
+            Text("minibuffer", font_size=20, color=GRAY_B))
         self.play(Create(self.frame_outline), FadeIn(self.mode_line),
                   FadeIn(self.mode_line_label),
                   Create(self.window_body, lag_ratio=0.2),
@@ -554,12 +667,12 @@ class SmartBuryIntro(Scene):
 
     def vanilla_way(self) -> None:
         self.say("Without Smart Bury, going to a third buffer means "
-                 "typing its name.", wait=0.8)
-        self.switch_to_buffer("C", "C-x b offers the other buffer, B, "
+                 "typing its name.", wait=2)
+        self.switch_to_buffer("C", "`C-x b` offers the ~other buffer~, B, "
                               "by default; we type C instead.",
                               expect="CABDE")
-        self.switch_to_buffer("A", "Coming back to A, now the other "
-                              "buffer, is just C-x b RET…",
+        self.switch_to_buffer("A", "Coming back to A, now the ~other "
+                              "buffer~, is just `C-x b` `RET`…",
                               expect="ACBDE")
         self.say("…leaves C ahead of B: the list got shuffled.", wait=0)
         self.play(Indicate(self.boxes["C"], color=WHITE),
@@ -568,17 +681,16 @@ class SmartBuryIntro(Scene):
         self.switch_to_buffer("B", "Putting it back takes more typing.",
                               expect="BACDE", fast=True)
         self.switch_to_buffer("A", expect="ABCDE", fast=True)
-        self.say("Smart Bury moves through buffers without typing names, "
-                 "and keeps the list in order.", wait=2)
+        self.say("Smart Bury moves through buffers without typing names…",
+                 wait=1.8)
+        self.say("…and keeps the list in order.", wait=1.8)
 
     def burying(self) -> None:
         self.press("C-x M--", self.sim.bury,
-                   "C-x M-- buries A: it goes to the end of the list, "
+                   "`C-x M--` buries A: it goes to the end of the list, "
                    "and B shows.", expect="BCDEA")
-        self.say("repeat-mode now lists, in the minibuffer, "
-                 "the keys that repeat without C-x.", wait=1.8)
         self.press("M--", self.sim.bury,
-                   "Each further M-- buries the current buffer in turn…",
+                   "Each further `M--` buries the ~current buffer~ in turn…",
                    expect="CDEAB", fast=True)
         self.press("M--", self.sim.bury, expect="DEABC", fast=True)
         self.press("M--", self.sim.bury, expect="EABCD", fast=True)
@@ -591,15 +703,14 @@ class SmartBuryIntro(Scene):
         self.say("Smart Bury remembers where a sequence started, "
                  "and how deep it is.", wait=0)
         self.state_visible = True
-        self.key_sequence = []
         self.play(FadeIn(self.state_panel),
                   self.initial_marker_target(visible=True),
-                  Transform(self.keys_text, self.keys_label("")))
+                  *self.keys_clear())
         self.wait(1.3)
         self.press("C-x _", self.sim.switch_through,
-                   "C-x _ goes to the other buffer, B.", expect="BACDE")
+                   "`C-x _` goes to the ~other buffer~, B.", expect="BACDE")
         self.press("_", self.sim.switch_through,
-                   "Each _ goes one buffer further, burying nothing…",
+                   "Each `_` goes one buffer further, burying nothing…",
                    expect="CABDE")
         self.press("_", self.sim.switch_through, expect="DABCE", fast=True)
         self.press("_", self.sim.switch_through,
@@ -608,43 +719,43 @@ class SmartBuryIntro(Scene):
         self.work("Work on E for a while: any other command ends the "
                   "sequence.", expect="EABCD")
         self.press("C-x M--", self.sim.bury,
-                   "Then C-x M-- buries E: A is back on top, and the list "
+                   "Then `C-x M--` buries E: A is back on top, and the list "
                    "is as it started.", expect="ABCDE")
 
     def switching_to_other(self) -> None:
         self.press("C-x M-_", self.sim.switch_to_other,
-                   "C-x M-_ switches to the other buffer, B…",
+                   "`C-x M-_` switches to the ~other buffer~, B…",
                    expect="BACDE")
         self.press("M-_", self.sim.switch_to_other,
-                   "…and M-_ switches back, as many times as wanted.",
+                   "…and `M-_` switches back, as many times as wanted.",
                    expect="ABCDE")
         self.press("M-_", self.sim.switch_to_other, expect="BACDE",
                    fast=True)
         self.press("M-_", self.sim.switch_to_other,
-                   "The current and the other buffer just trade places.",
+                   "The ~current~ and the ~other buffer~ just trade places.",
                    expect="ABCDE")
 
     def breaking_the_sequence(self) -> None:
         self.press("C-x _", self.sim.switch_through,
-                   "Without stopping, C-x _ _ _ _ goes four buffers deep, "
-                   "to E.", expect="BACDE", fast=True)
+                   "Without stopping, `C-x _` `_` `_` `_` goes four buffers "
+                   "deep, to E.", expect="BACDE", fast=True)
         self.press("_", self.sim.switch_through, expect="CABDE", fast=True)
         self.press("_", self.sim.switch_through, expect="DABCE", fast=True)
         self.press("_", self.sim.switch_through, expect="EABCD")
         self.press("M-_", self.sim.switch_to_other,
-                   "M-_ goes back to A, with the list restored.",
+                   "`M-_` goes back to A, with the list restored.",
                    expect="ABCDE")
-        self.press("C-x _", self.sim.switch_through, "Now C-x _ _ goes to C…",
-                   expect="BACDE", fast=True)
+        self.press("C-x _", self.sim.switch_through,
+                   "Now `C-x _` `_` goes to C…", expect="BACDE", fast=True)
         self.press("_", self.sim.switch_through, expect="CABDE")
         self.work("…and we work on C for a while, which ends the sequence.",
                   expect="CABDE")
         self.press("C-x _", self.sim.switch_through,
-                   "So C-x _ _ starts a new sequence from C: two deep is "
+                   "So `C-x _` `_` starts a new sequence from C: two deep is "
                    "now B.", expect="ACBDE", fast=True)
         self.press("_", self.sim.switch_through, expect="BCADE")
         self.press("M-_", self.sim.switch_to_other,
-                   "M-_ returns to C, where the new sequence started.",
+                   "`M-_` returns to C, where the new sequence started.",
                    expect="CABDE")
         self.say("Any other command starts a new sequence, "
                  "from wherever we are.", wait=2.5)
