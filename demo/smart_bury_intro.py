@@ -726,7 +726,7 @@ class SmartBuryIntro(Scene):
         rows = VGroup(
             self.command_row("C-x _",
                              "Go to the ~other buffer~, then one deeper per "
-                             "`_`, burying nothing.",
+                             "`_`*, burying nothing.",
                              "smart-bury-switch-through-buffers"),
             self.command_row("C-x M-_",
                              "Go back to where the sequence started, or to "
@@ -741,10 +741,14 @@ class SmartBuryIntro(Scene):
         for row in rows:
             row[1].next_to(row[0], RIGHT, buff=0.45 + column - row[0].width)
         rows.arrange(DOWN, aligned_edge=LEFT, buff=0.55).move_to(UP * 0.1)
-        footer = VGroup(rich_text("With {repeat-mode}, continue with just "
-                                  "`_`, `M-_`, or `M--`.", font_size=24,
-                                  color=DIM_COLOR))
-        footer.move_to(DOWN * 2.9)
+        footer = VGroup(
+            rich_text("{smart-bury-mode} binds these keys.", font_size=24,
+                      color=DIM_COLOR),
+            rich_text("*With {repeat-mode}, continue with just "
+                      "`_`, `M-_`, or `M--`.", font_size=24,
+                      color=DIM_COLOR),
+        ).arrange(DOWN, buff=0.22)
+        footer.move_to(DOWN * 2.75)
         self.show_card(heading, rows, footer, hold=3.5)
 
     def wrapped_row(self, vanilla: str, wrapper: str, note: str) -> VGroup:
@@ -768,13 +772,15 @@ class SmartBuryIntro(Scene):
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.6)
         rows.move_to(UP * 0.5)
         footer = VGroup(
+            rich_text("{smart-bury-mode} remaps them.", font_size=26,
+                      color=DIM_COLOR),
             rich_text("They do their usual job, then continue the same "
                       "~smart~ sequence.", font_size=26, color=DIM_COLOR),
             rich_text("The list is customizable: "
                       "{smart-bury-wrapped-commands}.", font_size=22,
                       color=DIM_COLOR),
-        ).arrange(DOWN, buff=0.25).move_to(DOWN * 2.3)
-        self.show_card(heading, rows, footer, hold=3)
+        ).arrange(DOWN, buff=0.25).move_to(DOWN * 2.2)
+        self.show_card(heading, rows, footer, hold=3.5)
 
     # The session
 
@@ -800,7 +806,7 @@ class SmartBuryIntro(Scene):
         self.wait(1.2)
 
         self.say("(The window shows the ~current buffer~; "
-                 "the minibuffer sits below it.", wait=0)
+                 "the minibuffer sits below it.)", wait=0)
         minibuffer_hint = self.at_minibuffer(
             Text("minibuffer", font_size=20, color=DIM_COLOR))
         self.play(Create(self.frame_outline), FadeIn(self.mode_line),
@@ -813,7 +819,7 @@ class SmartBuryIntro(Scene):
                            scale_factor=1.25), run_time=1.2)
         self.play(FadeOut(minibuffer_hint))
 
-        self.say("Keys pressed appear on the right.)", wait=0)
+        self.say("(Keys pressed appear on the right.)", wait=0)
         self.play(FadeIn(self.keys_panel))
         self.wait(1)
 
@@ -872,6 +878,15 @@ class SmartBuryIntro(Scene):
         self.press("_", self.sim.switch_through,
                    "…up to the last one, E. Behind it, A B C D stay in "
                    "order.", expect="EABCD")
+        self.press("_", self.sim.switch_through,
+                   "Past the last one, `_` wraps around to A, with the list "
+                   "restored…", expect="ABCDE", fast=True)
+        self.press("_", self.sim.switch_through,
+                   "…and cycles through them all again, back to E.",
+                   expect="BACDE", fast=True)
+        self.press("_", self.sim.switch_through, expect="CABDE", fast=True)
+        self.press("_", self.sim.switch_through, expect="DABCE", fast=True)
+        self.press("_", self.sim.switch_through, expect="EABCD")
         self.work("Work on E for a while: any other command ends the "
                   "sequence.", expect="EABCD")
         self.press("C-x M--", self.sim.bury,
@@ -925,9 +940,23 @@ class SmartBuryIntro(Scene):
         title = Text("Smart Bury", font_size=64, weight="BOLD",
                      color=TITLE_COLOR)
         tagline = Text(TAGLINE, font_size=28, color=DIM_COLOR)
+        # What to put in an init file, as a call to action.
+        setup = VGroup(*(Text(line, font=MONO, font_size=26, color=DIM_COLOR)
+                         for line in ("(smart-bury-mode 1)",
+                                      "(repeat-mode 1)")))
+        setup.arrange(DOWN, aligned_edge=LEFT, buff=0.15)
+        setup_box = RoundedRectangle(corner_radius=0.12,
+                                     width=setup.width + 0.6,
+                                     height=setup.height + 0.4,
+                                     color=GRAY_B, stroke_width=2)
+        setup_box.move_to(setup)
         link = Text("github.com/pedrormjunior/smart-bury", font=MONO,
                     font_size=26, color=DIM_COLOR)
-        VGroup(title, tagline, link).arrange(DOWN, buff=0.4)
-        self.play(FadeIn(title, shift=UP * 0.2), FadeIn(tagline),
+        VGroup(title, tagline, VGroup(setup_box, setup), link).arrange(
+            DOWN, buff=0.45)
+        self.play(FadeIn(title, shift=UP * 0.2), FadeIn(tagline))
+        self.play(FadeIn(setup_box), FadeIn(setup, shift=UP * 0.15),
                   FadeIn(link))
-        self.wait(3)
+        self.wait(4)
+        self.play(*(FadeOut(mobject) for mobject in self.mobjects),
+                  run_time=2.5)
