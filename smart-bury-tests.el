@@ -631,15 +631,6 @@ customization of `smart-bury-keys'."
   (should (memq 'smart-bury-quit-window smart-bury--commands))
   (should (memq 'smart-bury-kill-current-buffer smart-bury--commands)))
 
-(ert-deftest smart-bury-test-wrapped-commands-reuses-interactive-form ()
-  "A generated wrapper's `interactive' spec matches the wrapped
-command's own, so it accepts the same arguments (e.g. `quit-window's
-prefix-arg-driven KILL/WINDOW)."
-  (should (equal (interactive-form 'smart-bury-quit-window)
-                 (interactive-form 'quit-window)))
-  (should (equal (interactive-form 'smart-bury-kill-current-buffer)
-                 (interactive-form 'kill-current-buffer))))
-
 (ert-deftest smart-bury-test-wrapped-commands-excludes-removed-entry ()
   "Excluding `quit-window' from the list removes it from
 `smart-bury--commands' and drops its remap from `smart-bury-mode-map',
@@ -669,42 +660,102 @@ restores the previous configuration afterward."
     (should (equal smart-bury-wrapped-commands before))
     (should (memq 'smart-bury-quit-window smart-bury--commands))))
 
-(ert-deftest smart-bury-test-wrapped-commands-skips-undefined-command-with-warning ()
-  "Setting the list to include a wholly undefined symbol skips it
-with a warning instead of erroring: the other, valid entries in the
-same list still get wrapped normally, `smart-bury--commands' only
-includes the valid ones, and no dangling remap is left for the bad
-one.  This is a regression test: an earlier version signaled a
-`user-error' for any invalid entry, which -- since this runs as the
-defcustom's `:set' function -- could abort the very `require' that
-loads `smart-bury.el' if a stale saved Customize value referenced a
-since-renamed/removed command, taking the whole package down over
-one bad entry."
+(defvar smart-bury-test--recorded-arg nil
+  "Argument last received by `smart-bury-test--define-recording-command'.")
+
+(defun smart-bury-test--define-recording-command (name)
+  "Define NAME as a command recording its prefix-arg argument.
+The argument goes to `smart-bury-test--recorded-arg'."
+  (defalias name (lambda (&optional arg)
+                   (interactive "P")
+                   (setq smart-bury-test--recorded-arg arg))))
+
+(ert-deftest smart-bury-test-wrapped-commands-wraps-undefined-command-without-warning ()
+  "A command not defined yet (e.g. from a package loaded after Smart
+Bury) is wrapped anyway, without any warning: its wrapper is defined,
+tracked in `smart-bury--commands', remapped, and repeatable."
+  (should-not (fboundp 'smart-bury-test--later-cmd)) ; sanity
   (let (warnings)
     (cl-letf (((symbol-function 'display-warning)
                (lambda (type message &rest _) (push (cons type message) warnings))))
       (smart-bury-test-with-wrapped-commands
-          '(quit-window totally-undefined-xyz-zzz kill-current-buffer)
-        (should warnings)
-        (should-not (fboundp 'smart-bury-totally-undefined-xyz-zzz))
-        (should-not (memq 'smart-bury-totally-undefined-xyz-zzz smart-bury--commands))
-        (should-not (lookup-key smart-bury-mode-map [remap totally-undefined-xyz-zzz]))
-        (should (memq 'smart-bury-quit-window smart-bury--commands))
-        (should (memq 'smart-bury-kill-current-buffer smart-bury--commands))
-        (should (eq (lookup-key smart-bury-mode-map [remap quit-window])
-                   #'smart-bury-quit-window))))))
+          '(quit-window smart-bury-test--later-cmd kill-current-buffer)
+        (should-not warnings)
+        (should (commandp 'smart-bury-smart-bury-test--later-cmd))
+        (should (memq 'smart-bury-smart-bury-test--later-cmd smart-bury--commands))
+        (should (eq (lookup-key smart-bury-mode-map [remap smart-bury-test--later-cmd])
+                    #'smart-bury-smart-bury-test--later-cmd))
+        (should (eq (get 'smart-bury-smart-bury-test--later-cmd 'repeat-map)
+                    'smart-bury-repeat-map))
+        (should (memq 'smart-bury-quit-window smart-bury--commands))))))
+
+(ert-deftest smart-bury-test-wrapped-commands-wrapper-uses-command-defined-later ()
+  "A wrapper generated while its command was still undefined runs
+that command once it is defined, with the arguments read by the
+command's own `interactive' spec (here, the prefix argument)."
+  (smart-bury-test-with-buffers ((a "sb-a"))
+    (switch-to-buffer a)
+    (smart-bury-test-with-wrapped-commands '(smart-bury-test--later-cmd)
+      (unwind-protect
+          (progn
+            (smart-bury-test--define-recording-command 'smart-bury-test--later-cmd)
+            (setq smart-bury-test--recorded-arg nil)
+            (let ((current-prefix-arg '(4))
+                  (last-command 'some-other-command))
+              (call-interactively 'smart-bury-smart-bury-test--later-cmd))
+            (should (equal smart-bury-test--recorded-arg '(4))))
+        (fmakunbound 'smart-bury-test--later-cmd)))))
+
+(ert-deftest smart-bury-test-wrapped-commands-wrapper-of-undefined-command-signals-user-error ()
+  "Calling a wrapper whose command is still undefined signals a
+`user-error', before touching the Smart Bury sequence state."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
+    (switch-to-buffer a)
+    (smart-bury-test-with-wrapped-commands '(smart-bury-test--later-cmd)
+      (setq smart-bury--initial-buffer b)
+      (let ((last-command 'some-other-command))
+        (should-error (call-interactively 'smart-bury-smart-bury-test--later-cmd)
+                      :type 'user-error))
+      (should (eq smart-bury--initial-buffer b)))))
+
+(defvar smart-bury-test--lib-loaded nil
+  "Set by the library of `smart-bury-test--autoloaded-cmd' when loaded.")
+
+(ert-deftest smart-bury-test-wrapped-commands-does-not-load-autoloaded-command ()
+  "Wrapping an autoloaded command does not load its library."
+  (let ((file (make-temp-file
+               "smart-bury-test-lib" nil ".el"
+               (concat "(setq smart-bury-test--lib-loaded t)\n"
+                       "(defun smart-bury-test--autoloaded-cmd () (interactive))\n"))))
+    (setq smart-bury-test--lib-loaded nil)
+    (unwind-protect
+        (progn
+          (autoload 'smart-bury-test--autoloaded-cmd file nil t)
+          (smart-bury-test-with-wrapped-commands '(smart-bury-test--autoloaded-cmd)
+            (should (commandp 'smart-bury-smart-bury-test--autoloaded-cmd))
+            (should-not smart-bury-test--lib-loaded)))
+      (fmakunbound 'smart-bury-test--autoloaded-cmd)
+      (delete-file file))))
+
+(ert-deftest smart-bury-test-wrapped-commands-type-accepts-undefined-command ()
+  "The option's custom type accepts a command not defined yet, so
+`setopt' and Customize do not complain about it."
+  (require 'wid-edit)
+  (should (widget-apply (widget-convert (get 'smart-bury-wrapped-commands 'custom-type))
+                        :match '(quit-window smart-bury-test--later-cmd))))
 
 (ert-deftest smart-bury-test-wrapped-commands-skips-non-interactive-function-with-warning ()
-  "A defined-but-non-interactive function (no `interactive' spec) is
-skipped the same way as a wholly undefined symbol, with a warning
-instead of an error."
+  "A defined-but-non-interactive function (no `interactive' spec), or
+a nil entry, is skipped with a warning instead of an error, while the
+other entries still get wrapped."
   (should-not (interactive-form #'+)) ; sanity: `+' is real but non-interactive
   (let (warnings)
     (cl-letf (((symbol-function 'display-warning)
                (lambda (type message &rest _) (push (cons type message) warnings))))
-      (smart-bury-test-with-wrapped-commands '(quit-window +)
-        (should warnings)
+      (smart-bury-test-with-wrapped-commands '(quit-window + nil)
+        (should (= (length warnings) 2))
         (should-not (fboundp 'smart-bury-+))
+        (should-not (fboundp 'smart-bury-nil))
         (should (memq 'smart-bury-quit-window smart-bury--commands))))))
 
 (provide 'smart-bury-tests)

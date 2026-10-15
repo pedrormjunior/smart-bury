@@ -29,17 +29,16 @@
 ;; README.md for why that one isn't included by default), creates a few
 ;; throwaway buffers to cycle/bury/kill through, and -- when
 ;; `smart-bury-test-demo-stale-entry' is non-nil -- exercises a
-;; stale/invalid entry in `smart-bury-wrapped-commands' to confirm it's
-;; skipped with a warning rather than breaking anything (see `M-x
-;; view-echo-area-messages' or the *Warnings* buffer after startup).
+;; stale/undefined entry in `smart-bury-wrapped-commands' to confirm
+;; it's wrapped without a warning or breaking anything, its wrapper
+;; only signaling a `user-error' when called (see `M-x
+;; view-echo-area-messages' after startup).
 
 ;;; Code:
 
-(defvar smart-bury-test-demo-stale-entry nil
+(defvar smart-bury-test-demo-stale-entry t
   "When non-nil, demonstrate a stale/invalid entry in
-`smart-bury-wrapped-commands' on startup (see below).  Off by default,
-giving just the plain cycle/bury/kill setup; set to non-nil before
-loading this file to see the demonstration.")
+`smart-bury-wrapped-commands' on startup (see below).")
 
 (load-theme 'modus-vivendi t)
 
@@ -55,13 +54,15 @@ loading this file to see the demonstration.")
   ;; Simulate a stale saved Customize value referring to a
   ;; since-renamed/removed command, as would happen if a custom-file
   ;; set `smart-bury-wrapped-commands' before an upgrade dropped one
-  ;; of the commands it names.  This should warn (not error) and
-  ;; still leave `quit-window'/`kill-current-buffer' wrapped normally.
+  ;; of the commands it names.  This should neither warn nor error,
+  ;; and still leave `quit-window'/`kill-current-buffer' wrapped
+  ;; normally.  `M-x smart-bury-a-command-that-does-not-exist' then
+  ;; signals a `user-error'.
   (customize-set-variable
    'smart-bury-wrapped-commands
    '(quit-window a-command-that-does-not-exist kill-current-buffer))
 
-  (message "Smart Bury: quit-window wrapped? %s | kill-current-buffer wrapped? %s | bogus entry wrapped (should be nil)? %s"
+  (message "Smart Bury: quit-window wrapped? %s | kill-current-buffer wrapped? %s | bogus entry wrapped (should be t)? %s"
            (fboundp 'smart-bury-quit-window)
            (fboundp 'smart-bury-kill-current-buffer)
            (fboundp 'smart-bury-a-command-that-does-not-exist)))

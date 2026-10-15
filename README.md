@@ -199,6 +199,10 @@ instead wrap `View-quit`:
 (setopt smart-bury-wrapped-commands '(quit-window View-quit))
 ```
 
+<!-- A command can be listed before the package defining it is loaded -->
+<!-- (nor is it loaded by being listed): its wrapper only needs it when -->
+<!-- called. -->
+
 Here is a non-exhaustive list of functions that can be added to
 `smart-bury-wrapped-commands`: `magit-mode-bury-buffer`,
 `magit-blame-quit` ([Magit](https://magit.vc)), `ebib-quit`

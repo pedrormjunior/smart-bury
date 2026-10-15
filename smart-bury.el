@@ -271,26 +271,32 @@ For more documentation, see `bury-buffer'."
   "Return the symbol `smart-bury-FN' for vanilla command FN."
   (intern (format "smart-bury-%s" fn)))
 
+(defun smart-bury--interactive-args (fn)
+  "Evaluate FN's `interactive' spec and return its list of arguments.
+Signal a `user-error' if FN is not an interactive command, e.g.
+because the package defining it is not loaded yet."
+  (let ((iform (or (interactive-form fn)
+                   (user-error "`%s' is not an interactive command" fn))))
+    (call-interactively (eval `(lambda (&rest args) ,iform args) t))))
+
 (defun smart-bury--define-wrapper (fn)
   "Define `smart-bury-FN'.
 Defined function is an interactive command that wraps the vanilla
 command FN via `smart-bury--run-function'.  Defined function works
 together with other Smart Bury functions.
 
-FN's own `interactive' spec is reused verbatim, so the wrapper
-accepts whatever arguments FN itself would (e.g. `quit-window's
-prefix-arg-driven KILL/WINDOW)."
-  (let* ((name (smart-bury--wrapper-name fn))
-         (iform (or (interactive-form fn)
-                    (error "`%s' is not an interactive command" fn))))
-    (defalias name
-      (eval
-       `(lambda (&rest args)
-          ,iform
-          (apply #'smart-bury--run-function ',fn args)
-          (smart-bury--report "ran `%s', now at %s" ',fn (buffer-name)))
-       t)
-      (format "Smartly call `%s' and switch to the next buffer.\n\nFor more documentation, see `%s'." fn fn))))
+FN's own `interactive' spec is looked up and evaluated only when the
+wrapper is called, so the wrapper accepts whatever arguments FN itself
+would (e.g. `quit-window's prefix-arg-driven KILL/WINDOW), and FN need
+not be defined yet (nor its library loaded) when the wrapper is."
+  (defalias (smart-bury--wrapper-name fn)
+    (eval
+     `(lambda (&rest args)
+        (interactive (smart-bury--interactive-args ',fn))
+        (apply #'smart-bury--run-function ',fn args)
+        (smart-bury--report "ran `%s', now at %s" ',fn (buffer-name)))
+     t)
+    (format "Smartly call `%s' and switch to the next buffer.\n\nFor more documentation, see `%s'." fn fn)))
 
 (defvar smart-bury--mode-map-generated (make-sparse-keymap)
   "Package-owned parent of `smart-bury-mode-map'.
@@ -368,7 +374,8 @@ invoked COMMAND (see `smart-bury-repeat-map')."
 (defvar smart-bury--valid-wrapped-commands nil
   "The valid entries of `smart-bury-wrapped-commands'.
 That is, the entries that were actually wrapped, i.e., without the
-invalid ones skipped with a warning.")
+invalid ones skipped with a warning (see
+`smart-bury--set-wrapped-commands').")
 
 (defun smart-bury--rebuild-keymaps ()
   "Rebuild generated maps.
@@ -453,17 +460,26 @@ immediately."
 Used as the `:set' function of `smart-bury-wrapped-commands'.  Also
 update `smart-bury--commands' and Smart Bury's keymaps to match VALUE.
 
-Any entry in VALUE that isn't a usable interactive command (e.g.
-undefined -- as can happen with a stale saved Customize value
-referring to a command from a since-updated or removed dependency,
-evaluated only once `smart-bury.el' itself finally loads -- or a
-plain non-interactive function) is skipped with a warning rather
-than erroring: failing to wrap one stale entry is no reason to break
-the rest of this variable, or abort whatever `require'd this file in
-the first place."
+An entry of VALUE that is not defined yet is wrapped all the same,
+without loading anything: its wrapper only looks it up when called
+\(see `smart-bury--define-wrapper').  This lets VALUE name commands
+from packages loaded after Smart Bury.
+
+Only an entry that is known not to be a command (nil, a non-symbol,
+or a defined but non-interactive function) is skipped, with a
+warning rather than an error: failing to wrap one bad entry is no
+reason to break the rest of this variable, or abort whatever
+`require'd this file in the first place, since this function runs
+while `smart-bury.el' itself loads if a saved Customize value
+exists."
   (set-default symbol value)
   (let ((valid (seq-filter (lambda (fn)
-                             (or (interactive-form fn)
+                             (or (and fn
+                                      (symbolp fn)
+                                      ;; `commandp', unlike `interactive-form',
+                                      ;; recognizes an autoloaded command
+                                      ;; without loading its library.
+                                      (or (not (fboundp fn)) (commandp fn)))
                                  (progn
                                    (display-warning
                                     'smart-bury
@@ -486,8 +502,11 @@ the first place."
 in `smart-bury-keys') and is not part of this list.  Setting this
 variable (e.g. via `setopt' or Customize) regenerates the wrapper
 commands and keeps `smart-bury--commands', `smart-bury-mode-map', and
-`smart-bury-repeat-map' in sync."
-  :type '(repeat function)
+`smart-bury-repeat-map' in sync.
+
+A command may be listed before the package defining it is loaded:
+its wrapper only needs it when called."
+  :type '(repeat (symbol :tag "Command"))
   :group 'smart-bury
   :set #'smart-bury--set-wrapped-commands)
 
