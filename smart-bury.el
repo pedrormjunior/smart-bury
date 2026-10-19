@@ -157,13 +157,21 @@ while continuing one."
 BUFFER must be live, not a minibuffer, not internal (its name does
 not start with a space), and not displayed in a window of the
 selected frame -- unless ALLOW-CURRENT is non-nil and BUFFER is the
-current buffer."
+current buffer, or BUFFER is `smart-bury--initial-buffer' but not the
+current buffer.
+
+The initial buffer stays eligible while displayed in another window
+\(e.g. right after splitting the window, both windows show it): a
+sequence counts it as the first buffer once it leaves it, so dropping
+it would make every later call skip a buffer, and
+`smart-bury-switch-to-other-buffer' miss it."
   (and (buffer-live-p buffer)
        (not (minibufferp buffer))
        (not (string-prefix-p " " (buffer-name buffer)))
        (or (not (get-buffer-window buffer))
-           (and allow-current
-                (eq buffer (current-buffer))))))
+           (if (eq buffer (current-buffer))
+               allow-current
+             (eq buffer smart-bury--initial-buffer)))))
 
 (defun smart-bury--select-buffers (buffers n &optional allow-current)
   "Return the first N eligible buffers of BUFFERS.

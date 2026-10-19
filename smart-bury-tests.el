@@ -265,6 +265,32 @@ still passed)."
       (smart-bury-switch-to-other-buffer))
     (should (eq (current-buffer) a))))
 
+(ert-deftest smart-bury-test-sequence-with-initial-buffer-in-other-window ()
+  "With the initial buffer also shown in another window (e.g. right
+after splitting the window), switching through buffers visits them
+in order, and switching to the other buffer returns to the initial
+one.
+
+Regression test: the initial buffer, being displayed in the other
+window, was not eligible, so every call after the first skipped a
+buffer, and `smart-bury-switch-to-other-buffer' landed on the skipped
+buffer instead of the initial one.  Like the test above, this one
+needs the real `buffer-list'."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c") (d "sb-d"))
+    (delete-other-windows)
+    (dolist (buffer (list d c b a))
+      (switch-to-buffer buffer))
+    (split-window-right)
+    (let ((last-command 'some-other-command))
+      (smart-bury-switch-through-buffers))
+    (should (eq (current-buffer) b))
+    (let ((last-command 'smart-bury-switch-through-buffers))
+      (smart-bury-switch-through-buffers))
+    (should (eq (current-buffer) c))
+    (let ((last-command 'smart-bury-switch-through-buffers))
+      (smart-bury-switch-to-other-buffer))
+    (should (eq (current-buffer) a))))
+
 (ert-deftest smart-bury-test-switch-to-other-buffer-alternates-back-and-forth ()
   "A fresh call to `smart-bury-switch-to-other-buffer' switches to the
 \"other\" buffer; calling it again (continuing the sequence) switches
