@@ -55,6 +55,19 @@ error."
        (customize-set-variable 'smart-bury-wrapped-commands
                                smart-bury--orig-wrapped-commands))))
 
+(defmacro smart-bury-test-with-repeatable-commands (commands &rest body)
+  "Run BODY with `smart-bury-repeatable-commands' temporarily set to
+COMMANDS, always restoring the original value afterward even if BODY
+signals an error."
+  (declare (indent 1))
+  `(let ((smart-bury--orig-repeatable-commands smart-bury-repeatable-commands))
+     (unwind-protect
+         (progn
+           (customize-set-variable 'smart-bury-repeatable-commands ,commands)
+           ,@body)
+       (customize-set-variable 'smart-bury-repeatable-commands
+                               smart-bury--orig-repeatable-commands))))
+
 (defmacro smart-bury-test-with-keys (prefix keys &rest body)
   "Run BODY with `smart-bury-prefix-key' and `smart-bury-keys'
 temporarily set to PREFIX and KEYS (rebuilding Smart Bury's keymaps
@@ -783,6 +796,66 @@ other entries still get wrapped."
         (should-not (fboundp 'smart-bury-+))
         (should-not (fboundp 'smart-bury-nil))
         (should (memq 'smart-bury-quit-window smart-bury--commands))))))
+
+;;; `smart-bury-repeatable-commands'
+
+(ert-deftest smart-bury-test-repeatable-commands-arm-repeat-map-when-mode-on ()
+  "While `smart-bury-mode' is on, a listed command arms
+`smart-bury-repeat-map' whichever key invoked it, even if the command
+is not defined yet."
+  (let ((cmd (make-symbol "sb-cmd")))
+    (smart-bury-test-with-mode
+      (smart-bury-test-with-repeatable-commands (list cmd)
+        (should (eq (get cmd 'repeat-map) 'smart-bury-repeat-map))
+        (should (eq (get cmd 'repeat-check-key) 'no))))))
+
+(ert-deftest smart-bury-test-repeatable-commands-inactive-when-mode-off ()
+  "A listed command is left alone while `smart-bury-mode' is off, and
+gets its properties back once the mode is turned off."
+  (let ((cmd (make-symbol "sb-cmd")))
+    (smart-bury-test-with-repeatable-commands (list cmd)
+      (should-not (get cmd 'repeat-map))
+      (smart-bury-test-with-mode
+        (should (eq (get cmd 'repeat-map) 'smart-bury-repeat-map)))
+      (should-not (get cmd 'repeat-map))
+      (should-not (get cmd 'repeat-check-key)))))
+
+(ert-deftest smart-bury-test-repeatable-commands-restore-own-repeat-map ()
+  "A command's own repeat map is replaced while the command is listed,
+and restored, with its `repeat-check-key', when it is removed from the
+list."
+  (let ((cmd (make-symbol "sb-cmd")))
+    (put cmd 'repeat-map 'sb-own-map)
+    (put cmd 'repeat-check-key t)
+    (smart-bury-test-with-mode
+      (smart-bury-test-with-repeatable-commands (list cmd)
+        (should (eq (get cmd 'repeat-map) 'smart-bury-repeat-map))
+        (customize-set-variable 'smart-bury-repeatable-commands nil)
+        (should (eq (get cmd 'repeat-map) 'sb-own-map))
+        (should (eq (get cmd 'repeat-check-key) t))))))
+
+(ert-deftest smart-bury-test-repeatable-commands-keep-property-set-meanwhile ()
+  "A repeat map given to a listed command after Smart Bury replaced its
+own (e.g. by its package, loaded later) is not undone when the mode is
+turned off."
+  (let ((cmd (make-symbol "sb-cmd")))
+    (smart-bury-test-with-repeatable-commands (list cmd)
+      (smart-bury-test-with-mode
+        (put cmd 'repeat-map 'sb-later-map))
+      (should (eq (get cmd 'repeat-map) 'sb-later-map)))))
+
+(ert-deftest smart-bury-test-repeatable-commands-skip-non-command-with-warning ()
+  "A nil entry or a defined but non-interactive function is skipped
+with a warning, while the other entries are still made repeatable."
+  (let ((cmd (make-symbol "sb-cmd"))
+        warnings)
+    (cl-letf (((symbol-function 'display-warning)
+               (lambda (type message &rest _) (push (cons type message) warnings))))
+      (smart-bury-test-with-mode
+        (smart-bury-test-with-repeatable-commands (list nil '+ cmd)
+          (should (= (length warnings) 2))
+          (should-not (get '+ 'repeat-map))
+          (should (eq (get cmd 'repeat-map) 'smart-bury-repeat-map)))))))
 
 (provide 'smart-bury-tests)
 

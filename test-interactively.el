@@ -58,9 +58,14 @@
   ;; and still leave `quit-window'/`kill-current-buffer' wrapped
   ;; normally.  `M-x smart-bury-a-command-that-does-not-exist' then
   ;; signals a `user-error'.
-  (customize-set-variable
-   'smart-bury-wrapped-commands
-   '(quit-window a-command-that-does-not-exist kill-current-buffer))
+  (custom-set-variables
+   '(smart-bury-repeatable-commands
+     '( split-window-below split-window-right
+        delete-other-windows delete-window switch-to-buffer
+        a-command-that-does-not-exist
+        ))
+   '(smart-bury-wrapped-commands
+     '(quit-window kill-current-buffer a-command-that-does-not-exist)))
 
   (message "Smart Bury: quit-window wrapped? %s | kill-current-buffer wrapped? %s | bogus entry wrapped (should be t)? %s"
            (fboundp 'smart-bury-quit-window)

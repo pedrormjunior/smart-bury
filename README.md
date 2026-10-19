@@ -92,7 +92,10 @@ bound with the `C-x` prefix can simply be followed by `_`, `M-_`, or
 `M--`, respectively.  The same holds after an interactive call to any
 of the wrapped functions (e.g., `q` in a read-only buffer, if it is
 bound to `quit-window`): it also enables the *repeat map*, so
-*switching through buffers* can be done with fewer key presses.
+*switching through buffers* can be done with fewer key presses.  So
+does splitting the window with `C-x 2` or `C-x 3`: e.g., `C-x 3 _`
+shows another buffer next to the current one (see [Repeatable
+commands](#repeatable-commands)).
 
 We recommend reading the examples below before trying it out, to get
 a sense of how it is meant to be used.
@@ -208,7 +211,44 @@ Here is a non-exhaustive list of functions that can be added to
 `magit-blame-quit` ([Magit](https://magit.vc)), `ebib-quit`
 ([Ebib](https://joostkremers.github.io/ebib/)), `mu4e-quit`
 ([mu4e](https://www.djcbsoftware.nl/code/mu/)), `Custom-buffer-done`,
-`kill-buffer`, `switch-to-buffer` (built in)…
+`kill-buffer` (built in)…
+
+In general, commands that get rid of the current buffer (burying,
+quitting, or killing it) belong here.  Those that don’t, but after
+which we may want to switch buffers, belong in
+`smart-bury-repeatable-commands` instead (see below).
+
+### Repeatable commands
+
+The commands in `smart-bury-repeatable-commands` (default:
+`(split-window-below split-window-right)`) aren’t wrapped: they keep
+their own behavior and don’t take part in “smart” sequences.  With
+`smart-bury-mode` and `repeat-mode` enabled, they only enable the
+*repeat map*, so that a new sequence can start with a single key.
+For instance, `C-x 3 _` splits the window and shows another buffer in
+the selected window, while the new one keeps showing the current
+buffer; further `_` presses go on to the next buffers.
+
+For example, to also enable the *repeat map* after `delete-window`
+and `switch-to-buffer`:
+
+```elisp
+(setopt smart-bury-repeatable-commands
+        '(split-window-below split-window-right
+          delete-other-windows delete-window switch-to-buffer))
+```
+
+Other candidates are `tab-new` (`C-x t 2`), `make-frame-command` (`C-x
+5 2`), and `clone-frame` (`C-x 5 c`).  Keep in mind that the first key
+pressed after such a command goes to the *repeat map*: e.g., `_` right
+after `C-x b` switches through buffers instead of inserting `_`, and
+`M--` buries the buffer instead of acting as `negative-argument`.
+
+A command with a *repeat map* of its own (e.g., `other-window`,
+`undo`, or `next-buffer`) loses it while listed; it gets it back when
+removed from the list or when `smart-bury-mode` is disabled.  As with
+wrapped commands, a command may be listed before the package defining
+it is loaded.
 
 ### Repeat map
 
@@ -227,17 +267,18 @@ This requires `kill-current-buffer` to be in
 `smart-bury-repeat-map` or `smart-bury-mode-map` this way are
 preserved when any of the options above is customized later.
 
-*Smart Bury* also sets `repeat-check-key` to `no` for its functions,
-so the *repeat map* arms regardless of *which key actually invoked the
-command* — not just its default binding.  This matters most for
-`smart-bury-quit-window` and `smart-bury-kill-current-buffer`: they
-only reach the user via a remap of whatever key
-`quit-window`/`kill-current-buffer` are bound to (e.g. `q` in many
-read-only modes), so there's no fixed key of their own to require.
-With the check relaxed, even invoking one of those through such a
-mode-local `q` arms the map — meaning, for instance, that after `q` is
-pressed in a certain read-only mode, we’re is ready to navigate
-through the buffers in *repeat mode*.
+*Smart Bury* also sets `repeat-check-key` to `no` for its functions
+(and for the repeatable commands above, while `smart-bury-mode` is
+enabled), so the *repeat map* arms regardless of *which key actually
+invoked the command* — not just its default binding.  This matters
+most for `smart-bury-quit-window` and
+`smart-bury-kill-current-buffer`: they only reach the user via a remap
+of whatever key `quit-window`/`kill-current-buffer` are bound to
+(e.g. `q` in many read-only modes), so there's no fixed key of their
+own to require.  With the check relaxed, even invoking one of those
+through such a mode-local `q` arms the map — meaning, for instance,
+that after `q` is pressed in a certain read-only mode, we’re is ready
+to navigate through the buffers in *repeat mode*.
 
 If one prefers to disable this behavior for a function:
 

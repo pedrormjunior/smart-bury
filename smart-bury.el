@@ -328,16 +328,18 @@ parent is mutated rather than any keymap being reassigned.)")
 ;;;###autoload
 (define-minor-mode smart-bury-mode
   "Globally remap `bury-buffer' and wrapped commands to Smart Bury ones.
-Wrapped commands are the entries of `smart-bury-wrapped-commands'.
-Also bind the commands in `smart-bury-keys' under
-`smart-bury-prefix-key'.
+Wrapped commands are the entries of `smart-bury-wrapped-commands'.  Also
+bind the commands in `smart-bury-keys' under `smart-bury-prefix-key',
+and make the commands in `smart-bury-repeatable-commands' arm
+`smart-bury-repeat-map'.
 
-Customize those two options to change the keys.  Bindings added to
-`smart-bury-mode-map' itself (e.g. via `define-key') are preserved
+Customize those options to change the keys and commands.  Bindings added
+to `smart-bury-mode-map' itself (e.g. via `define-key') are preserved
 across any later customization."
   :global t
   :group 'smart-bury
-  :keymap smart-bury-mode-map)
+  :keymap smart-bury-mode-map
+  (smart-bury--apply-repeatable-commands))
 
 (defvar smart-bury--repeat-map-generated (make-sparse-keymap)
   "Package-owned parent of `smart-bury-repeat-map'.
@@ -350,22 +352,24 @@ Rebuilt in place from `smart-bury-keys' (see
     map)
   "Keymap letting `repeat-mode' repeat Smart Bury's commands.
 
-Each command in `smart-bury-keys' is repeatable with its own key
-\(the one following `smart-bury-prefix-key'); those bindings live in
-the parent keymap, `smart-bury--repeat-map-generated'.  Bindings
-added to this keymap itself (e.g. via `define-key') belong to the
-user and are preserved across any later customization.
+Each command in `smart-bury-keys' is repeatable with its own key (the
+one following `smart-bury-prefix-key'); those bindings live in the
+parent keymap, `smart-bury--repeat-map-generated'.  Bindings added to
+this keymap itself (e.g. via `define-key') belong to the user and are
+preserved across any later customization.
 
 Every Smart Bury command, including each one generated from
-`smart-bury-wrapped-commands', sets option `repeat-check-key' to `no',
-so this map arms regardless of which key actually invoked the command --
-notably commands like `smart-bury-quit-window' and
-`smart-bury-kill-current-buffer', which only reach the user via a remap
-of whatever key `quit-window'/`kill-current-buffer' are bound
-to (e.g. \"q\" in many read-only modes), and so have no fixed \"last
-key\" of their own to require.  None of the wrapped commands get a
-default binding in this map; add one yourself (and bind the matching
-vanilla command, if needed) to make it repeatable with that key.
+`smart-bury-wrapped-commands', and, while `smart-bury-mode' is on, every
+command in `smart-bury-repeatable-commands', sets option
+`repeat-check-key' to `no', so this map arms regardless of which key
+actually invoked the command -- notably commands like
+`smart-bury-quit-window' and `smart-bury-kill-current-buffer', which
+only reach the user via a remap of whatever key
+`quit-window'/`kill-current-buffer' are bound to (e.g. \"q\" in many
+read-only modes), and so have no fixed \"last key\" of their own to
+require.  None of the wrapped commands get a default binding in this
+map; add one yourself (and bind the matching vanilla command, if needed)
+to make it repeatable with that key.
 
 This has no effect unless the user has enabled `repeat-mode'
 themselves; `smart-bury-mode' does not turn it on.")
@@ -379,11 +383,70 @@ invoked COMMAND (see `smart-bury-repeat-map')."
 
 (mapc #'smart-bury--make-repeatable smart-bury--basic-commands)
 
+(defun smart-bury--valid-commands (commands option)
+  "Return the entries of COMMANDS that may be interactive commands.
+An entry not defined yet is kept, since the package defining it may be
+loaded later.  Only an entry known not to be a command (nil, a
+non-symbol, or a defined but non-interactive function) is dropped, with
+a warning naming OPTION, the option COMMANDS comes from, rather than an
+error: failing to use one bad entry is no reason to break the rest of
+OPTION, or abort whatever `require'd this file in the first place, since
+OPTION's `:set' function runs while `smart-bury.el' itself loads if a
+saved Customize value exists."
+  (seq-filter (lambda (fn)
+                (or (and fn
+                         (symbolp fn)
+                         ;; `commandp', unlike `interactive-form',
+                         ;; recognizes an autoloaded command
+                         ;; without loading its library.
+                         (or (not (fboundp fn)) (commandp fn)))
+                    (progn
+                      (display-warning
+                       'smart-bury
+                       (format "`%s' in `%s' is not an interactive command; ignoring it"
+                               fn option)
+                       :warning)
+                      nil)))
+              commands))
+
+(defvar smart-bury--valid-repeatable-commands nil
+  "The valid entries of `smart-bury-repeatable-commands'.
+That is, without the invalid ones skipped with a warning (see
+`smart-bury--valid-commands').")
+
+(defvar smart-bury--repeatable-saved nil
+  "The properties replaced by `smart-bury--apply-repeatable-commands'.
+An alist of (COMMAND REPEAT-MAP . REPEAT-CHECK-KEY), the `repeat-map'
+and `repeat-check-key' properties each command had before, most recently
+replaced first, for them to be restored later.")
+
+(defun smart-bury--apply-repeatable-commands ()
+  "Make `smart-bury-repeatable-commands' arm `smart-bury-repeat-map'.
+Restore the properties of the commands made repeatable before, then, if
+`smart-bury-mode' is on, make each valid entry of
+`smart-bury-repeatable-commands' repeatable (see
+`smart-bury--make-repeatable'), saving its properties first.
+
+A property changed since it was replaced (e.g. by the command's package,
+loaded later, giving it its own repeat map) is not restored."
+  (dolist (entry smart-bury--repeatable-saved)
+    (let ((command (car entry)))
+      (when (eq (get command 'repeat-map) 'smart-bury-repeat-map)
+        (put command 'repeat-map (cadr entry)))
+      (when (eq (get command 'repeat-check-key) 'no)
+        (put command 'repeat-check-key (cddr entry)))))
+  (setq smart-bury--repeatable-saved nil)
+  (when smart-bury-mode
+    (dolist (command smart-bury--valid-repeatable-commands)
+      (push (cons command (cons (get command 'repeat-map)
+                                (get command 'repeat-check-key)))
+            smart-bury--repeatable-saved)
+      (smart-bury--make-repeatable command))))
+
 (defvar smart-bury--valid-wrapped-commands nil
   "The valid entries of `smart-bury-wrapped-commands'.
 That is, the entries that were actually wrapped, i.e., without the
-invalid ones skipped with a warning (see
-`smart-bury--set-wrapped-commands').")
+invalid ones skipped with a warning (see `smart-bury--valid-commands').")
 
 (defun smart-bury--rebuild-keymaps ()
   "Rebuild generated maps.
@@ -455,13 +518,48 @@ Each KEY, in `kbd' format, must be a single key: `smart-bury-mode' binds
 it after `smart-bury-prefix-key', and `smart-bury-repeat-map' binds it
 alone, so that COMMAND can be repeated with just that key under
 `repeat-mode'.  The repeat key only takes effect after commands that arm
-`smart-bury-repeat-map', i.e., the three basic Smart Bury commands and
-the wrappers generated from `smart-bury-wrapped-commands'.  Setting this
-variable (e.g. via `setopt' or Customize) updates both keymaps
-immediately."
+`smart-bury-repeat-map', i.e., the three basic Smart Bury commands, the
+wrappers generated from `smart-bury-wrapped-commands', and the commands
+in `smart-bury-repeatable-commands'.  Setting this variable (e.g. via
+`setopt' or Customize) updates both keymaps immediately."
   :type '(alist :key-type function :value-type string)
   :group 'smart-bury
   :set #'smart-bury--set-and-rebuild)
+
+(defun smart-bury--set-repeatable-commands (symbol value)
+  "Set SYMBOL to VALUE and make its commands repeatable.
+Used as the `:set' function of `smart-bury-repeatable-commands' (see
+`smart-bury--apply-repeatable-commands').  An entry known not to be a
+command is skipped, with a warning (see `smart-bury--valid-commands')."
+  (set-default symbol value)
+  (setq smart-bury--valid-repeatable-commands
+        (smart-bury--valid-commands value symbol))
+  (smart-bury--apply-repeatable-commands))
+
+(defcustom smart-bury-repeatable-commands
+  '(split-window-below split-window-right)
+  "Commands arming `smart-bury-repeat-map' while `smart-bury-mode' is on.
+Unlike those in `smart-bury-wrapped-commands', these commands are not
+wrapped: they keep their own behavior and do not continue a Smart Bury
+sequence.  Under `repeat-mode', they only arm `smart-bury-repeat-map',
+whichever key invoked them, so that a new sequence can start with a
+single key.  For example, with the default value, \\[split-window-right]
+followed by the repeat key of `smart-bury-switch-through-buffers' (`_'
+by default), pressed repeatedly, cycles the selected window through the
+other buffers, while the new window keeps showing the current one.
+
+This is meant for commands that do not get rid of the current buffer;
+those that do (e.g. `kill-buffer') belong in
+`smart-bury-wrapped-commands' instead.
+
+While `smart-bury-mode' is on, the `repeat-map' and `repeat-check-key'
+properties of each command are replaced, and they are restored when the
+mode is turned off or the command removed from this list.  A command may
+be listed before the package defining it is loaded.  Setting this
+variable (e.g. via `setopt' or Customize) takes effect immediately."
+  :type '(repeat (symbol :tag "Command"))
+  :group 'smart-bury
+  :set #'smart-bury--set-repeatable-commands)
 
 (defun smart-bury--set-wrapped-commands (symbol value)
   "Set SYMBOL to VALUE and regenerate the wrapper commands.
@@ -469,32 +567,12 @@ Used as the `:set' function of `smart-bury-wrapped-commands'.  Also
 update `smart-bury--commands' and Smart Bury's keymaps to match VALUE.
 
 An entry of VALUE that is not defined yet is wrapped all the same,
-without loading anything: its wrapper only looks it up when called
-\(see `smart-bury--define-wrapper').  This lets VALUE name commands
-from packages loaded after Smart Bury.
-
-Only an entry that is known not to be a command (nil, a non-symbol,
-or a defined but non-interactive function) is skipped, with a
-warning rather than an error: failing to wrap one bad entry is no
-reason to break the rest of this variable, or abort whatever
-`require'd this file in the first place, since this function runs
-while `smart-bury.el' itself loads if a saved Customize value
-exists."
+without loading anything: its wrapper only looks it up when called (see
+`smart-bury--define-wrapper').  This lets VALUE name commands from
+packages loaded after Smart Bury.  Only an entry known not to be a
+command is skipped, with a warning (see `smart-bury--valid-commands')."
   (set-default symbol value)
-  (let ((valid (seq-filter (lambda (fn)
-                             (or (and fn
-                                      (symbolp fn)
-                                      ;; `commandp', unlike `interactive-form',
-                                      ;; recognizes an autoloaded command
-                                      ;; without loading its library.
-                                      (or (not (fboundp fn)) (commandp fn)))
-                                 (progn
-                                   (display-warning
-                                    'smart-bury
-                                    (format "`%s' is not an interactive command; not wrapping it" fn)
-                                    :warning)
-                                   nil)))
-                           value)))
+  (let ((valid (smart-bury--valid-commands value symbol)))
     (setq smart-bury--valid-wrapped-commands valid)
     (setq smart-bury--commands
           (append smart-bury--basic-commands
