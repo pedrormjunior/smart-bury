@@ -1,4 +1,4 @@
-.PHONY: test compile checkdoc package-lint demo-check demo-preview demo intro-check intro intro-part voice-models voice-samples test-interactively test-emacs-defaults-interactively
+.PHONY: test compile checkdoc package-lint demo-check demo-preview demo intro-check intro intro-part intro-narration voice-models voice-samples test-interactively test-emacs-defaults-interactively
 
 test:
 	emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el \
@@ -73,14 +73,34 @@ MANIM_QUALITY_1080p60 = h
 MANIM_QUALITY_1440p60 = p
 MANIM_QUALITY_2160p60 = k
 
-# Render in INTRO_QUALITY into demo/smart-bury-intro-INTRO_QUALITY.mp4.
-intro: demo-check
+# Narrator's voice in `make intro' (see demo/narration.py); empty for a
+# silent render: make intro VOICE=
+VOICE = am_michael
+
+# Render in INTRO_QUALITY, narrated in VOICE, into
+# demo/smart-bury-intro-INTRO_QUALITY.mp4, with the captions as
+# subtitles in demo/smart-bury-intro-INTRO_QUALITY.srt.
+INTRO_OUTPUT = demo/media/videos/smart_bury_intro/$(INTRO_QUALITY)/smart-bury-intro
+intro: demo-check $(if $(VOICE),voice-models)
 	@test -n "$(MANIM_QUALITY_$(INTRO_QUALITY))" || \
 	  { echo "unknown INTRO_QUALITY: $(INTRO_QUALITY)"; exit 1; }
-	cd demo && uv run manim -q$(MANIM_QUALITY_$(INTRO_QUALITY)) \
+	cd demo && SMART_BURY_VOICE=$(VOICE) \
+	  uv run manim -q$(MANIM_QUALITY_$(INTRO_QUALITY)) \
 	  --media_dir media -o smart-bury-intro smart_bury_intro.py SmartBuryIntro
-	cp demo/media/videos/smart_bury_intro/$(INTRO_QUALITY)/smart-bury-intro.mp4 \
-	  demo/smart-bury-intro-$(INTRO_QUALITY).mp4
+	cp $(INTRO_OUTPUT).mp4 demo/smart-bury-intro-$(INTRO_QUALITY).mp4
+	cp $(INTRO_OUTPUT).srt demo/smart-bury-intro-$(INTRO_QUALITY).srt
+
+# Per caption, how long its part of the intro lasts without narration,
+# how long its speech in VOICE lasts, and the difference (positive: the
+# video waits that long for the speech).  A dry run, synthesizing only
+# new or changed captions; narrated renders print the same table.
+intro-narration: demo-check voice-models
+	@test -n "$(VOICE)" || { echo "intro-narration needs a VOICE"; exit 1; }
+	cd demo && SMART_BURY_VOICE=$(VOICE) uv run manim --dry_run \
+	  smart_bury_intro.py SmartBuryIntro > media/intro-narration.log 2>&1 \
+	  || { cat media/intro-narration.log; exit 1; }
+	@tr '\r' '\n' < demo/media/intro-narration.log | \
+	  sed -n '/^ #  scene/,/in all\.$$/p'
 
 # Fast render of a range of the intro's animations, for iterating on one
 # part: make intro-part N=120,180 (animation indexes, as in Manim's log)

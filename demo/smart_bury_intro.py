@@ -18,6 +18,7 @@ smart_bury_demo.py; this file reuses a few of its pieces unchanged.
 
 from __future__ import annotations
 
+import os
 import random
 from xml.sax.saxutils import escape
 
@@ -54,6 +55,7 @@ from manim import (
     there_and_back,
 )
 
+from narration import Narrator, spoken
 from smart_bury_demo import MONO
 from smart_bury_sim import REPEATABLE_COMMANDS, SMART_COMMANDS, SmartBury
 
@@ -284,6 +286,16 @@ class SmartBuryIntro(Scene):
         self.key_boxes: list[VGroup] = []
         self.caption: VGroup | None = None
         self.state_visible = False
+        # Narration, only with a voice in SMART_BURY_VOICE (see
+        # narration.py): each caption is spoken from when it appears.
+        voice = os.environ.get("SMART_BURY_VOICE")
+        self.narrator = Narrator(voice) if voice else None
+        self.speech_end = 0.0           # when the last clip ends
+        # Per narrated caption: [text, start, speech length, how long
+        # the video waited for the speech to end]; reported at the end.
+        self.narration_log: list[list] = []
+        # The caption shown and since when, for its subtitle.
+        self.subtitle: tuple[str, float] | None = None
 
         self.next_section("Title")
         self.title_card()
@@ -309,6 +321,7 @@ class SmartBuryIntro(Scene):
         self.splitting_the_window()
         self.next_section("Outro")
         self.outro()
+        self.report_narration()
 
     # Building blocks
 
@@ -533,8 +546,28 @@ class SmartBuryIntro(Scene):
             f"counter: {counter}", font=MONO, font_size=24, color=INITIAL_COLOR
         ).move_to(RIGHT * SIDE_X + UP * (KEYS_Y - 1.75))
 
-    def say(self, text: str, wait: float = 1.5) -> None:
-        """Replace the caption at the bottom (see `parse_rich' for TEXT)."""
+    def say(self, text: str, wait: float = 1.5,
+            speech: str | None = None) -> None:
+        """Replace the caption at the bottom (see `parse_rich' for TEXT).
+
+        With narration, the caption waits for the previous one's speech
+        to end, then is spoken as it appears: SPEECH, or TEXT's words
+        (see `spoken').  Its speech may go on over what follows, until
+        the next caption.  Each caption is also a subtitle.
+        """
+        self.finish_speech()
+        self.end_subtitle()
+        self.subtitle = (parse_rich(text)[0], self.time)
+        if self.narrator is not None:
+            path, duration = self.narrator.clip(
+                spoken(text) if speech is None else speech)
+            # Not `add_sound': it drops the sound when the previous
+            # animation came from Manim's cache, whose skipping state
+            # lasts until the next animation starts.
+            self.renderer.file_writer.add_sound(str(path), self.time)
+            self.speech_end = self.time + duration
+            self.narration_log.append([self.subtitle[0], self.time,
+                                       duration, 0.0])
         new = rich_text(text, font_size=26, color=WHITE)  # captions: white
         if new.width > 13:
             new.scale_to_fit_width(13)
@@ -1414,7 +1447,43 @@ class SmartBuryIntro(Scene):
             expect="DACEB",
         )
 
+    def finish_speech(self) -> None:
+        """Wait until the last caption's speech has ended, if any."""
+        if self.speech_end > self.time:
+            self.narration_log[-1][3] = self.speech_end - self.time
+            self.wait(self.speech_end - self.time)
+
+    def report_narration(self) -> None:
+        """Print, per caption, how long its part of the video lasts
+        without narration, how long its speech lasts, and the difference
+        (positive: the video waited that long for the speech to end;
+        negative: that much silence follows the speech)."""
+        if self.narrator is None:
+            return
+        # Each caption lasts until the next, the last one until the outro.
+        ends = [entry[1] for entry in self.narration_log[1:]]
+        ends.append(self.outro_start)
+        print(" #  scene  speech   diff  caption")
+        for index, ((text, start, speech, waited), end) in enumerate(
+                zip(self.narration_log, ends), 1):
+            scene = end - start - waited
+            print(f"{index:2} {scene:5.1f}s {speech:5.1f}s {speech - scene:+5.1f}s"
+                  f"  {text}")
+        waited = sum(entry[3] for entry in self.narration_log)
+        print(f"The video waited for speech {waited:.1f} s in all.")
+
+    def end_subtitle(self) -> None:
+        """End the subtitle of the caption shown, if any, now."""
+        if self.subtitle is not None:
+            text, start = self.subtitle
+            self.add_subcaption(text, duration=self.time - start,
+                                offset=start - self.time)
+            self.subtitle = None
+
     def outro(self) -> None:
+        self.finish_speech()
+        self.outro_start = self.time
+        self.end_subtitle()
         self.clear_all()
         title = Text(
             "Smart Bury", font_size=64, weight="BOLD", color=TITLE_COLOR
