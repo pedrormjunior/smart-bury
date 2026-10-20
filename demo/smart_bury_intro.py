@@ -610,16 +610,13 @@ class SmartBuryIntro(Scene):
         return overlay
 
     def press(self, keys: str, action, caption: str = "",
-              expect: str | None = None, fast: bool = False,
-              after=None) -> None:
+              expect: str | None = None, fast: bool = False) -> None:
         """Press KEYS, run the model's ACTION, and animate the result.
 
         KEYS are appended to the keys panel, unless they start with C-x
         or the previous command did not arm the repeat map, in which case
         they start a new key sequence there.  EXPECT, if given, is the
-        buffer order the storyboard expects.  AFTER, if given, is called
-        as soon as the buffers have reached their new places, before the
-        caption's reading time.
+        buffer order the storyboard expects.
         """
         if caption:
             self.say(caption, wait=0.25 if fast else 0.5)
@@ -654,8 +651,6 @@ class SmartBuryIntro(Scene):
         if repeating:
             self.glow_off(glowing, halos)
             self.remove(glowing[0])    # the minibuffer's overlay
-        if after is not None:
-            after()
         wait = 0.35 if fast else max(1.0, 0.15 * len(caption.split()))
         suffix = keys.split()[-1]
         if keys.startswith("C-x ") and suffix in REPEAT_KEYS:
@@ -1057,47 +1052,17 @@ class SmartBuryIntro(Scene):
         self.say("Any other command starts a new sequence, "
                  "from wherever we are.", wait=2.5)
 
-    def fade_label(self, box: VGroup, text: Text, run_time: float) -> None:
-        """Fade BOX's label out, then fade TEXT in, in its place.
-
-        Unlike a Transform, letters do not morph into each other mid-way.
-        TEXT replaces the old label in BOX rather than the old label
-        `become'-ing it: `become' keeps as many glyphs as the longer of
-        the two, so "B" after "Buried" would be six stacked copies of
-        "B", brighter than other labels whenever partly transparent.
-        """
-        old = box[1]
-        self.play(old.animate.set_opacity(0), run_time=run_time / 2)
-        new = text.copy().move_to(old).set_opacity(0)
-        box.remove(old)
-        box.add(new)
-        self.play(new.animate.set_opacity(1), run_time=run_time / 2)
-
     def why_smart(self) -> None:
         """The "smart" in Smart Bury: a buffer buried right after reaching
         it was just on the way, so the sequence goes on instead of back."""
         # repeat-mode is still active, so plain keys continue.
         self.press("_", self.sim.switch_through,
                    "Now the “smart” part: `_` goes to B…", expect="BACDE")
-        # As soon as B reaches the end of the list, it is labeled
-        # "Buried" while its box swells; the label turns back to "B"
-        # before the next caption (the box stays: a buried buffer is
-        # still there, only last).
-        box = self.boxes["B"]
-        original = box[1].copy()
-
-        def mark_buried() -> None:
-            buried = Text("Buried", font_size=22, color=DIM_COLOR)
-            self.fade_label(box, buried, run_time=0.4)
-            self.play(box.animate(rate_func=there_and_back).scale(1.25),
-                      run_time=0.9)
-
         self.press("M--", self.sim.bury,
                    "…and `M--` right away buries B, going on to C, "
-                   "not back to A.", expect="CADEB", after=mark_buried)
-        self.fade_label(box, original, run_time=0.8)
+                   "not back to A.", expect="CADEB")
         self.say("B was simply on the way to C: that is the “smart” in "
-                 "Smart Bury.", wait=2.2)
+                 "Smart Bury.", wait=2.5)
         self.press("M-_", self.sim.switch_to_other,
                    "`M-_` goes back to A, with B now at the end of the list.",
                    expect="ACDEB")
