@@ -1,4 +1,4 @@
-.PHONY: test compile checkdoc package-lint demo-check demo-preview demo intro-check intro intro-part test-interactively test-emacs-defaults-interactively
+.PHONY: test compile checkdoc package-lint demo-check demo-preview demo intro-check intro intro-part voice-models voice-samples test-interactively test-emacs-defaults-interactively
 
 test:
 	emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el \
@@ -90,6 +90,23 @@ intro-part:
 	cd demo && uv run manim -ql --media_dir media -n $(N) \
 	  -o smart-bury-intro-part smart_bury_intro.py SmartBuryIntro
 	cp demo/media/videos/smart_bury_intro/480p15/smart-bury-intro-part.mp4 demo/
+
+# Narration (demo/narration.py): Kokoro's full-precision English model
+# and its voices, downloaded once from kokoro-onnx's releases.
+VOICE_MODELS_URL = \
+  https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0
+VOICE_MODELS = demo/voice-models/kokoro-v1.0.onnx \
+  demo/voice-models/voices-v1.0.bin
+
+voice-models: $(VOICE_MODELS)
+
+demo/voice-models/%:
+	mkdir -p demo/voice-models
+	curl -fL -o $@.part $(VOICE_MODELS_URL)/$* && mv $@.part $@
+
+# A few captions in each candidate voice, into demo/voice-samples/.
+voice-samples: voice-models
+	cd demo && uv run python narration.py --samples
 
 test-interactively:
 	emacs -Q -L . -l smart-bury -l $@

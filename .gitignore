@@ -2,4 +2,6 @@
 /.elpa/
 /demo/.venv/
 /demo/media/
+/demo/voice-models/
+/demo/voice-samples/
 __pycache__/
