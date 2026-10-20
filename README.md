@@ -296,6 +296,19 @@ customize `smart-bury-same-frame`, e.g.:
 (setopt smart-bury-same-frame nil)
 ```
 
+### Buffers shown in other windows
+
+By default, *smart bury* skips buffers already shown in another window
+of the frame, as `other-buffer` (and thus `C-x b`’s default) does —
+except the buffer a sequence started from (e.g., right after `C-x 3`,
+when both windows show it), which keeps its place in the sequence.  To
+go through those buffers too, so that the selected window may end up
+showing the same buffer as another window:
+
+```elisp
+(setopt smart-bury-include-displayed-buffers t)
+```
+
 ### Display actions
 
 *Smart Bury* always switches buffers in the selected window, ignoring

@@ -304,6 +304,45 @@ needs the real `buffer-list'."
       (smart-bury-switch-to-other-buffer))
     (should (eq (current-buffer) a))))
 
+(ert-deftest smart-bury-test-skips-buffer-in-other-window ()
+  "By default, switching through buffers skips a buffer displayed in
+another window, unless it is the initial buffer."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c") (d "sb-d"))
+    (delete-other-windows)
+    (dolist (buffer (list d c b a))
+      (switch-to-buffer buffer))
+    (set-window-buffer (split-window-right) b)
+    (let ((smart-bury-include-displayed-buffers nil))
+      (let ((last-command 'some-other-command))
+        (smart-bury-switch-through-buffers))
+      (should (eq (current-buffer) c))
+      (let ((last-command 'smart-bury-switch-through-buffers))
+        (smart-bury-switch-through-buffers))
+      (should (eq (current-buffer) d))
+      (let ((last-command 'smart-bury-switch-through-buffers))
+        (smart-bury-switch-to-other-buffer))
+      (should (eq (current-buffer) a)))))
+
+(ert-deftest smart-bury-test-include-displayed-buffers ()
+  "With `smart-bury-include-displayed-buffers' non-nil, switching
+through buffers also goes through a buffer displayed in another
+window, and the sequence still returns to the initial buffer."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c") (d "sb-d"))
+    (delete-other-windows)
+    (dolist (buffer (list d c b a))
+      (switch-to-buffer buffer))
+    (set-window-buffer (split-window-right) b)
+    (let ((smart-bury-include-displayed-buffers t))
+      (let ((last-command 'some-other-command))
+        (smart-bury-switch-through-buffers))
+      (should (eq (current-buffer) b))
+      (let ((last-command 'smart-bury-switch-through-buffers))
+        (smart-bury-switch-through-buffers))
+      (should (eq (current-buffer) c))
+      (let ((last-command 'smart-bury-switch-through-buffers))
+        (smart-bury-switch-to-other-buffer))
+      (should (eq (current-buffer) a)))))
+
 (ert-deftest smart-bury-test-switching-ignores-display-actions ()
   "Switching through buffers ignores `display-buffer-alist', even with
 `switch-to-buffer-obey-display-actions' non-nil.

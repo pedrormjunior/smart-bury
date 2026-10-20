@@ -95,6 +95,15 @@ whenever that variable is set.")
   :type 'boolean
   :group 'smart-bury)
 
+(defcustom smart-bury-include-displayed-buffers nil
+  "Whether to switch to buffers already displayed in other windows.
+When nil, Smart Bury skips the buffers displayed in a window of the
+selected frame, as `other-buffer' does, except the buffer the current
+sequence started from.  When non-nil, it goes through them too, so the
+selected window may end up showing the same buffer as another one."
+  :type 'boolean
+  :group 'smart-bury)
+
 (defcustom smart-bury-messages t
   "Whether Smart Bury commands report where they landed.
 When non-nil, each command called interactively shows a short message
@@ -154,11 +163,12 @@ while continuing one."
 
 (defun smart-bury--eligible-p (buffer &optional allow-current)
   "Return non-nil if BUFFER may be switched to by Smart Bury.
-BUFFER must be live, not a minibuffer, not internal (its name does
-not start with a space), and not displayed in a window of the
-selected frame -- unless ALLOW-CURRENT is non-nil and BUFFER is the
-current buffer, or BUFFER is `smart-bury--initial-buffer' but not the
-current buffer.
+BUFFER must be live, not a minibuffer, not internal (its name does not
+start with a space), and not displayed in a window of the selected frame
+-- unless ALLOW-CURRENT is non-nil and BUFFER is the current buffer, or
+BUFFER is not the current buffer and either
+`smart-bury-include-displayed-buffers' is non-nil or BUFFER is
+`smart-bury--initial-buffer'.
 
 The initial buffer stays eligible while displayed in another window
 \(e.g. right after splitting the window, both windows show it): a
@@ -171,7 +181,8 @@ it would make every later call skip a buffer, and
        (or (not (get-buffer-window buffer))
            (if (eq buffer (current-buffer))
                allow-current
-             (eq buffer smart-bury--initial-buffer)))))
+             (or smart-bury-include-displayed-buffers
+                 (eq buffer smart-bury--initial-buffer))))))
 
 (defun smart-bury--select-buffers (buffers n &optional allow-current)
   "Return the first N eligible buffers of BUFFERS.
