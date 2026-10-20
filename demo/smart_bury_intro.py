@@ -1,10 +1,11 @@
 """Short introduction to Smart Bury, rendered with Manim Community Edition.
 
 After title cards for the three basic commands and the wrapped ones, a
-single session with five buffers shows the mechanism: the "list of all
-buffers" at the top (with the current and the other buffer marked), an
-Emacs frame (window, mode line, minibuffer) in the middle, the keys
-pressed and Smart Bury's state on the right, and captions at the bottom.
+single session with five buffers shows the mechanism: an Emacs frame
+(window, mode line, minibuffer) at the top, split in two at the end, the
+"list of all buffers" below it (with the current and the other buffer
+marked), the keys pressed and Smart Bury's state on the right, and
+captions at the bottom.
 
 Every buffer order shown comes from the model in smart_bury_sim.py, and
 each storyboard step asserts the order it expects (see `expect'), so
@@ -30,6 +31,7 @@ from manim import (
     GRAY_A,
     GRAY_B,
     GRAY_D,
+    GRAY_E,
     WHITE,
     ManimColor,
     AnimationGroup,
@@ -53,7 +55,7 @@ from manim import (
 )
 
 from smart_bury_demo import MONO
-from smart_bury_sim import SMART_COMMANDS, SmartBury
+from smart_bury_sim import REPEATABLE_COMMANDS, SMART_COMMANDS, SmartBury
 
 Text.set_default(font="Sans", color="#ebdbb2")
 
@@ -72,6 +74,9 @@ CURRENT_COLOR = "#00bfff"
 # real message lists them, which follows `smart-bury-keys' (switch
 # through, switch to the other buffer, bury).
 REPEAT_KEYS = ["_", "M-_", "M--"]
+# Commands after which repeat-mode's map is active: the Smart Bury ones,
+# and those in `smart-bury-repeatable-commands'.
+ARMING_COMMANDS = SMART_COMMANDS | REPEATABLE_COMMANDS
 INITIAL_COLOR = CURRENT_COLOR   # "initial" marker and counter
 TITLE_COLOR = CURRENT_COLOR     # "Smart Bury" at the start and the end
 LINE_OPACITY = 0.85             # the window's colored text lines
@@ -81,6 +86,12 @@ BACKGROUND = "#000000"
 NAME_COLOR = "#00bfff"  # command and mode names
 DIM_COLOR = "#ebdbb2"   # secondary (dimmed) text
 HIGHLIGHT = NAME_COLOR
+# Once the window is split: the marker of the buffer shown in the other
+# (unselected) window, and that window's mode line text.
+RIGHT_WINDOW_COLOR = ManimColor(CURRENT_COLOR).interpolate(
+    ManimColor(BACKGROUND), 0.4)
+INACTIVE_COLOR = ManimColor(DIM_COLOR).interpolate(ManimColor(BACKGROUND),
+                                                   0.4)
 KEY_FILL = GRAY_D
 KEY_STROKE = DIM_COLOR
 TAGLINE = "Keep wanted buffers at the top of the “list of all buffers”"
@@ -265,6 +276,8 @@ class SmartBuryIntro(Scene):
         self.burying()
         self.next_section("Why smart")
         self.why_smart()
+        self.next_section("Splitting the window")
+        self.splitting_the_window()
         self.next_section("Outro")
         self.outro()
 
@@ -307,24 +320,47 @@ class SmartBuryIntro(Scene):
                                     + UP * INITIAL_Y)
         self.initial_marker.set_opacity(0)
 
-    def body_lines(self, name: str) -> VGroup:
-        """Fake text lines filling the window, in the buffer's color."""
+    def body_lines(self, name: str, left: float | None = None,
+                   width: float = FRAME_WIDTH) -> VGroup:
+        """Fake text lines filling a window, in the buffer's color.
+
+        The window spans WIDTH from LEFT (by default, the whole frame).
+        A narrower window shows the same lines, narrower.
+        """
         rng = random.Random(name)
-        left = frame_left() + 0.45
+        scale = (width - 0.6) / (FRAME_WIDTH - 0.6)
+        left = (frame_left() if left is None else left) + 0.45
         top = FRAME_TOP - 0.4
         lines = VGroup()
         for i in range(5):
-            width = rng.uniform(2.5, FRAME_WIDTH - 1.6)
-            indent = rng.choice([0, 0, 0.5, 1.0])
+            length = rng.uniform(2.5, FRAME_WIDTH - 1.6) * scale
+            indent = rng.choice([0, 0, 0.5, 1.0]) * scale
             start = RIGHT * (left + indent) + UP * (top - 0.48 * i)
-            lines.add(Line(start, start + RIGHT * width,
+            lines.add(Line(start, start + RIGHT * length,
                            color=COLORS[name], stroke_width=6,
                            stroke_opacity=LINE_OPACITY))
         return lines
 
-    def mode_line_text(self, name: str) -> Text:
-        text = Text(name, font=MONO, font_size=24, color=DIM_COLOR)
-        text.move_to(self.mode_line, aligned_edge=LEFT)
+    def window_geometry(self) -> tuple[float, float]:
+        """Left edge and width of the selected window: the whole frame,
+        or its left half once split (see `split_window_right')."""
+        if self.sim.others:
+            return frame_left(), FRAME_WIDTH / 2
+        return frame_left(), FRAME_WIDTH
+
+    def mode_line_rect(self, left: float, width: float,
+                       active: bool = True) -> Rectangle:
+        """The mode line of the window spanning WIDTH from LEFT."""
+        rect = Rectangle(width=width, height=MODE_LINE_HEIGHT, color=GRAY_B,
+                         stroke_width=3, fill_color=GRAY_D if active else GRAY_E,
+                         fill_opacity=1)
+        return rect.move_to(RIGHT * (left + width / 2)
+                            + UP * (WINDOW_BOTTOM - MODE_LINE_HEIGHT / 2))
+
+    def mode_line_text(self, name: str, mode_line: Rectangle | None = None,
+                       color=DIM_COLOR) -> Text:
+        text = Text(name, font=MONO, font_size=24, color=color)
+        text.move_to(mode_line or self.mode_line, aligned_edge=LEFT)
         return text.shift(RIGHT * 0.3)
 
     def at_minibuffer(self, mobject):
@@ -378,11 +414,7 @@ class SmartBuryIntro(Scene):
                                        color=GRAY_B, stroke_width=3)
         self.frame_outline.move_to(RIGHT * FRAME_X
                                    + UP * (FRAME_TOP + bottom) / 2)
-        self.mode_line = Rectangle(width=FRAME_WIDTH, height=MODE_LINE_HEIGHT,
-                                   color=GRAY_B, stroke_width=3,
-                                   fill_color=GRAY_D, fill_opacity=1)
-        self.mode_line.move_to(RIGHT * FRAME_X
-                               + UP * (WINDOW_BOTTOM - MODE_LINE_HEIGHT / 2))
+        self.mode_line = self.mode_line_rect(frame_left(), FRAME_WIDTH)
         self.mode_line_label = self.mode_line_text(self.sim.current)
         self.window_body = self.body_lines(self.sim.current)
         self.minibuffer = self.minibuffer_label()
@@ -508,8 +540,11 @@ class SmartBuryIntro(Scene):
         if new[0] != old[0]:
             animations += [
                 Transform(self.mode_line_label, self.mode_line_text(new[0])),
-                Transform(self.window_body, self.body_lines(new[0])),
+                Transform(self.window_body,
+                          self.body_lines(new[0], *self.window_geometry())),
             ]
+        if self.sim.others:
+            animations += self.split_markers()
         if self.state_visible:
             animations += [
                 Transform(self.counter_text,
@@ -569,7 +604,7 @@ class SmartBuryIntro(Scene):
         """Press KEYS, run the model's ACTION, and animate the result.
 
         KEYS are appended to the keys panel, unless they start with C-x
-        or the previous command was not a Smart Bury one, in which case
+        or the previous command did not arm the repeat map, in which case
         they start a new key sequence there.  EXPECT, if given, is the
         buffer order the storyboard expects.  AFTER, if given, is called
         as soon as the buffers have reached their new places, before the
@@ -579,10 +614,10 @@ class SmartBuryIntro(Scene):
             self.say(caption, wait=0.25 if fast else 0.5)
         animations = []
         if (keys.startswith("C-x")
-                or self.sim.last_command not in SMART_COMMANDS):
+                or self.sim.last_command not in ARMING_COMMANDS):
             animations += self.keys_clear()
         repeating = (keys in REPEAT_KEYS
-                     and self.sim.last_command in SMART_COMMANDS)
+                     and self.sim.last_command in ARMING_COMMANDS)
         animations += self.keys_push(keys)
         glowing, halos, wiggles = [], [], []
         if repeating:
@@ -688,6 +723,71 @@ class SmartBuryIntro(Scene):
                           run_time=0.55 if fast else 1.0)
         self.wait(0.35 if fast else 1.0)
 
+    def split_window_right(self, caption: str, expect: str) -> None:
+        """C-x 3: the selected window keeps the frame's left half, and a
+        new window on the right shows the current buffer too.
+
+        `split-window-right' is in `smart-bury-repeatable-commands', so
+        repeat-mode's message shows, as after a Smart Bury command.
+        """
+        self.say(caption, wait=0.5)
+        self.play(*self.keys_clear(), *self.keys_push("C-x 3"), run_time=0.4)
+        self.sim.split_window()
+        self.expect(expect, "C-x 3")
+        half = FRAME_WIDTH / 2
+        right = self.sim.others[0]
+        self.right_mode_line = self.mode_line_rect(FRAME_X, half,
+                                                   active=False)
+        self.right_mode_line_label = self.mode_line_text(
+            right, self.right_mode_line, color=INACTIVE_COLOR)
+        self.right_body = self.body_lines(right, FRAME_X, half)
+        self.divider = Line(RIGHT * FRAME_X + UP * FRAME_TOP,
+                            RIGHT * FRAME_X + UP * WINDOW_BOTTOM,
+                            color=GRAY_B, stroke_width=3)
+        # The marker of the buffer shown in the right window, hidden while
+        # it is also the current buffer (see `split_markers').
+        self.right_frame = RoundedRectangle(
+            corner_radius=0.2, width=1.55, height=1.15,
+            color=RIGHT_WINDOW_COLOR, stroke_width=4).set_stroke(opacity=0)
+        self.right_label = Text("right window", font_size=18,
+                                color=RIGHT_WINDOW_COLOR).set_opacity(0)
+        x = slot_position(self.sim.blist.index(right))[0]
+        self.right_frame.move_to(RIGHT * x + UP * LIST_Y)
+        self.right_label.move_to(RIGHT * x + UP * MARKER_LABEL_Y)
+        self.add(self.right_frame, self.right_label)
+        self.play(
+            Transform(self.mode_line,
+                      self.mode_line_rect(*self.window_geometry())),
+            Transform(self.window_body,
+                      self.body_lines(self.sim.current,
+                                      *self.window_geometry())),
+            Create(self.divider),
+            FadeIn(self.right_mode_line), FadeIn(self.right_mode_line_label),
+            FadeIn(self.right_body, shift=LEFT * 0.3),
+            Transform(self.minibuffer, self.repeat_message()),
+            *self.split_markers(),
+            run_time=1.0)
+        self.wait(max(1.0, 0.15 * len(caption.split())))
+
+    def split_markers(self) -> list:
+        """Animations updating the list's markers while the window is split.
+
+        `(other-buffer)' skips buffers shown in another window, so the
+        "other" marker, fixed on the second slot, shows only while the
+        other buffer is still second.  The right window's marker follows
+        its buffer, unless that is the current buffer.
+        """
+        other_shown = float(self.sim.other == self.sim.blist[1])
+        right = self.sim.others[0]
+        right_shown = float(right != self.sim.current)
+        x = slot_position(self.sim.blist.index(right))[0]
+        return [
+            self.other_frame.animate.set_stroke(opacity=other_shown),
+            self.other_label.animate.set_opacity(other_shown),
+            self.right_frame.animate.set_x(x).set_stroke(opacity=right_shown),
+            self.right_label.animate.set_x(x).set_opacity(right_shown),
+        ]
+
     # Cards
 
     def clear_all(self) -> None:
@@ -786,8 +886,12 @@ class SmartBuryIntro(Scene):
             rich_text("The list is customizable: "
                       "{smart-bury-wrapped-commands}.", font_size=22,
                       color=DIM_COLOR),
-        ).arrange(DOWN, buff=0.25).move_to(DOWN * 2.2)
-        self.show_card(heading, rows, footer, hold=3.5)
+            rich_text("{smart-bury-repeatable-commands} (`C-x 2`, `C-x 3`) "
+                      "only arm the repeat map.", font_size=22,
+                      color=DIM_COLOR),
+        ).arrange(DOWN, buff=0.25).move_to(DOWN * 2.35)
+        # Longer than the other card's hold: one more line to read.
+        self.show_card(heading, rows, footer, hold=6)
 
     # The session
 
@@ -988,6 +1092,23 @@ class SmartBuryIntro(Scene):
                    expect="ACDEB")
         self.say("Had we worked on B first, burying it would go back to A, "
                  "as usual.", wait=3)
+
+    def splitting_the_window(self) -> None:
+        """C-x 3 arms the repeat map, so `_' right away fills the selected
+        window with another buffer; the initial buffer, still shown in the
+        right window, keeps its place in the sequence."""
+        self.split_window_right("`C-x 3` splits the window: both windows "
+                                "show A…", expect="ACDEB")
+        self.say("…and, being in {smart-bury-repeatable-commands}, it arms "
+                 "the repeat map.", wait=2.2)
+        self.press("_", self.sim.switch_through,
+                   "So `_` right away shows another buffer, C, next to A…",
+                   expect="CADEB")
+        self.press("_", self.sim.switch_through,
+                   "…and `_` again goes on to D: A, still on the right, keeps "
+                   "its place.", expect="DACEB")
+        self.say("`C-x 3` `_` `_`: D next to A, without typing a buffer name.",
+                 wait=2.5)
 
     def outro(self) -> None:
         self.clear_all()

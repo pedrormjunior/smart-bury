@@ -2,8 +2,10 @@
 
 Each method mirrors its counterpart in ../smart-bury.el, so the animation
 cannot show a "list of all buffers" order the package does not produce.
-The model has a single window: buffers are plain names, and ``blist[0]``
-is the current buffer, the only one displayed.
+Buffers are plain names, and ``blist[0]`` is the current buffer, shown
+in the selected window.  The window may be split (``split_window``): the
+other windows then show the buffers in ``others``, which only matters
+for which buffers are eligible and for ``other_buffer``.
 
 Modeling assumption: vanilla ``bury-buffer`` and ``quit-window`` move the
 current buffer to the end of the list, and the window then shows the new
@@ -26,17 +28,25 @@ BURY = "smart-bury-bury-buffer"
 QUIT = "smart-bury-quit-window"
 WORK = "self-insert-command"
 SWITCH_TO_BUFFER = "switch-to-buffer"
+SPLIT_WINDOW_BELOW = "split-window-below"
+SPLIT_WINDOW_RIGHT = "split-window-right"
 
 # `smart-bury--commands' with the default `smart-bury-wrapped-commands'
 # (only the wrappers the demo uses).
 SMART_COMMANDS = {SWITCH_THROUGH, SWITCH_TO_OTHER, BURY, QUIT}
+# The default `smart-bury-repeatable-commands': not Smart Bury commands
+# (they don't continue a sequence), but they arm the repeat map too.
+REPEATABLE_COMMANDS = {SPLIT_WINDOW_BELOW, SPLIT_WINDOW_RIGHT}
 
 
-def other_buffer(blist) -> str | None:
-    """`(other-buffer)' for a single window: the most recent buffer
-    other than the current one, skipping internal buffers (names
-    starting with a space).  It is also `C-x b's default."""
-    return next((b for b in blist[1:] if not b.startswith(" ")), None)
+def other_buffer(blist, others=()) -> str | None:
+    """`(other-buffer)': the most recent buffer other than the current
+    one, skipping internal buffers (names starting with a space), and
+    preferring buffers not shown in another window (in OTHERS).  It is
+    also `C-x b's default."""
+    candidates = [b for b in blist[1:] if not b.startswith(" ")]
+    return next((b for b in candidates if b not in others),
+                next(iter(candidates), None))
 
 
 @dataclass(frozen=True)
@@ -49,6 +59,7 @@ class Step:
     blist: tuple[str, ...]
     initial: str | None
     counter: int
+    others: tuple[str, ...] = ()
 
     @property
     def current(self) -> str:
@@ -56,7 +67,7 @@ class Step:
 
     @property
     def other(self) -> str | None:
-        return other_buffer(self.blist)
+        return other_buffer(self.blist, self.others)
 
 
 class SmartBury:
@@ -67,6 +78,7 @@ class SmartBury:
         self.counter = 1  # `smart-bury--counter'
         self.initial: str | None = None  # `smart-bury--initial-buffer'
         self.last_command = WORK  # `last-command'
+        self.others: list[str] = []  # shown in the other windows
         self.steps: list[Step] = []
 
     @property
@@ -75,7 +87,7 @@ class SmartBury:
 
     @property
     def other(self) -> str | None:
-        return other_buffer(self.blist)
+        return other_buffer(self.blist, self.others)
 
     # Primitives
 
@@ -106,9 +118,14 @@ class SmartBury:
         return self._maybe_start_sequence() or self._is_initial_p()
 
     def _eligible_p(self, buffer: str, allow_current: bool) -> bool:
-        # Only the current buffer is displayed in a window.
-        displayed = buffer == self.current
-        return not buffer.startswith(" ") and (not displayed or allow_current)
+        if buffer.startswith(" "):
+            return False
+        if buffer != self.current and buffer not in self.others:
+            return True             # not displayed in any window
+        if buffer == self.current:
+            return allow_current
+        # Shown in another window: only the initial buffer stays eligible.
+        return buffer == self.initial
 
     def _select_buffers(
         self, buffers: list[str], n: int, allow_current: bool = False
@@ -149,7 +166,7 @@ class SmartBury:
     def _record(self, keys: str, command: str, caption: str) -> Step:
         self.last_command = command
         step = Step(keys, command, caption, tuple(self.blist),
-                    self.initial, self.counter)
+                    self.initial, self.counter, tuple(self.others))
         self.steps.append(step)
         return step
 
@@ -181,6 +198,16 @@ class SmartBury:
         command, so the next Smart Bury command starts a new sequence."""
         self._switch(name)
         return self._record(keys, SWITCH_TO_BUFFER, caption)
+
+    def split_window(self, keys: str = "C-x 3",
+                     command: str = SPLIT_WINDOW_RIGHT,
+                     caption: str = "") -> Step:
+        """`split-window-right' (or COMMAND, e.g. `split-window-below'):
+        the new window shows the current buffer too, and the selected
+        window stays selected.  Not a Smart Bury command, so the next
+        Smart Bury command starts a new sequence."""
+        self.others.append(self.current)
+        return self._record(keys, command, caption)
 
     def work(self, caption: str = "") -> Step:
         """Any non-Smart Bury command, which ends the current sequence."""
@@ -318,6 +345,31 @@ def check() -> list[str]:
     sb.switch_through()
     _expect("C-x b then C-x _", (sb.current, sb.initial), ("B", "D"),
             failures)
+
+    # Right after splitting the window, the initial buffer, still shown in
+    # the other window, keeps its place in the sequence (as in the test
+    # `smart-bury-test-sequence-with-initial-buffer-in-other-window').
+    sb = SmartBury(["A", "B", "C", "D"])
+    sb.split_window()
+    sb.switch_through()
+    _expect("split, then _", (sb.current, sb.others), ("B", ["A"]), failures)
+    sb.switch_through()
+    _expect("split, then _ _", sb.current, "C", failures)
+    sb.switch_to_other()
+    _expect("split, then _ _ M-_", sb.current, "A", failures)
+
+    # The intro's split (verified against smart-bury.el in batch Emacs):
+    # from A C D E B, C-x 3 _ _ puts D next to A, and (other-buffer)
+    # skips A, shown in the other window.
+    sb = SmartBury(["A", "C", "D", "E", "B"])
+    sb.split_window()
+    _expect("intro split other", sb.other, "C", failures)
+    sb.switch_through()
+    _expect("intro split _", order(sb), "CADEB", failures)
+    _expect("intro split _ other", sb.other, "D", failures)
+    sb.switch_through()
+    _expect("intro split _ _", order(sb), "DACEB", failures)
+    _expect("intro split _ _ other", sb.other, "C", failures)
 
     # The other buffer is the second in the list, skipping internal ones.
     _expect("other", SmartBury(BUFFERS).other, "B", failures)
