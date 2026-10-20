@@ -119,18 +119,23 @@ so the message also shows that the sequence is still going."
   "Face for the \"Smart Bury\" label of Smart Bury's messages."
   :group 'smart-bury)
 
+(defun smart-bury--message (text)
+  "Show TEXT in the echo area, labeled as a Smart Bury message.
+The label, \"Smart Bury:\", is shown in face
+`smart-bury-message-prefix'."
+  (message "%s %s"
+           (propertize "Smart Bury:" 'face 'smart-bury-message-prefix)
+           text))
+
 (defmacro smart-bury--report (format-string &rest args)
   "Report a Smart Bury message built from FORMAT-STRING and ARGS.
 Show it only when `smart-bury-messages' is non-nil and the enclosing
 command was called interactively.  This is a macro so that
-`called-interactively-p' is evaluated in that command, not here.
-The message is prefixed with \"Smart Bury:\", the label shown in face
-`smart-bury-message-prefix'."
+`called-interactively-p' is evaluated in that command, not here.  See
+`smart-bury--message' for the message's label."
   `(when (and smart-bury-messages
               (called-interactively-p 'interactive))
-     (message "%s %s"
-              (propertize "Smart Bury:" 'face 'smart-bury-message-prefix)
-              (format-message ,format-string ,@args))))
+     (smart-bury--message (format-message ,format-string ,@args))))
 
 (defun smart-bury--buffer-list nil
   "Return `buffer-list' according to configuration.
@@ -378,7 +383,12 @@ across any later customization."
   :global t
   :group 'smart-bury
   :keymap smart-bury-mode-map
-  (smart-bury--apply-repeatable-commands))
+  (smart-bury--apply-repeatable-commands)
+  ;; Before `repeat-mode's own hook (depth 0), which appends its hint to
+  ;; the message this one shows, whichever mode was enabled first.
+  (if smart-bury-mode
+      (add-hook 'post-command-hook #'smart-bury--report-repeatable -50)
+    (remove-hook 'post-command-hook #'smart-bury--report-repeatable)))
 
 (defvar smart-bury--repeat-map-generated (make-sparse-keymap)
   "Package-owned parent of `smart-bury-repeat-map'.
@@ -481,6 +491,26 @@ loaded later, giving it its own repeat map) is not restored."
                                 (get command 'repeat-check-key)))
             smart-bury--repeatable-saved)
       (smart-bury--make-repeatable command))))
+
+(defun smart-bury--report-repeatable ()
+  "Report position 1 after a command of `smart-bury-repeatable-commands'.
+Run from `post-command-hook' while `smart-bury-mode' is on.  Such a
+command arms `smart-bury-repeat-map' without continuing a sequence, so
+the next Smart Bury command starts one from the current buffer, which
+behaves the same as being at position 1 of a sequence: the message
+reports that, out of the buffers the new sequence would go through.
+
+Only when `smart-bury-messages' and `repeat-mode' are on (without the
+latter, nothing is armed), and when the command left no message of its
+own, which this one would replace."
+  (when (and smart-bury-messages
+             (bound-and-true-p repeat-mode)
+             (memq this-command smart-bury--valid-repeatable-commands)
+             (not (current-message)))
+    ;; The total as the new sequence will see it: one starting from the
+    ;; current buffer, not from an earlier sequence's initial buffer.
+    (let ((smart-bury--initial-buffer (current-buffer)))
+      (smart-bury--message (smart-bury--position 1)))))
 
 (defvar smart-bury--valid-wrapped-commands nil
   "The valid entries of `smart-bury-wrapped-commands'.

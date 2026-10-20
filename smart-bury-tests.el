@@ -546,6 +546,70 @@ lowers the total."
                     (let ((last-command 'self-insert-command))
                       (smart-bury-switch-to-other-buffer)))))))
 
+(defvar repeat-mode)                    ; Emacs 28+
+
+(defun smart-bury-test-report-repeatable (command repeat)
+  "Return what Smart Bury reports after repeatable COMMAND.
+REPEAT is the value of `repeat-mode'.  Only `split-window-right' is
+repeatable here."
+  (let ((smart-bury--valid-repeatable-commands '(split-window-right))
+        (this-command command)
+        (repeat-mode repeat))
+    (mapcar #'substring-no-properties
+            (smart-bury-test-capturing-messages
+              (smart-bury--report-repeatable)))))
+
+(ert-deftest smart-bury-test-messages-repeatable-command ()
+  "After a repeatable command, with `repeat-mode' on, Smart Bury reports
+position 1, the one a sequence from the current buffer starts at.  It
+reports nothing without `repeat-mode', after other commands, with
+`smart-bury-messages' nil, or when the command left a message."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
+    (switch-to-buffer b)
+    (switch-to-buffer a)
+    (let ((smart-bury-messages t))
+      (should (equal (smart-bury-test-report-repeatable 'split-window-right t)
+                     (smart-bury-test-positions (smart-bury-test-total) 1)))
+      (should-not (smart-bury-test-report-repeatable 'split-window-right nil))
+      (should-not (smart-bury-test-report-repeatable 'self-insert-command t))
+      (let ((smart-bury-messages nil))
+        (should-not (smart-bury-test-report-repeatable 'split-window-right t)))
+      (cl-letf (((symbol-function 'current-message) (lambda () "Its own")))
+        (should-not
+         (smart-bury-test-report-repeatable 'split-window-right t))))))
+
+(ert-deftest smart-bury-test-messages-repeatable-command-total ()
+  "The total reported after a repeatable command is the one a sequence
+from the current buffer goes through: an earlier sequence's initial
+buffer, shown in another window, does not count."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
+    (delete-other-windows)
+    (switch-to-buffer a)
+    (set-window-buffer (split-window-right) b)
+    (let ((smart-bury-messages t)
+          (smart-bury--initial-buffer b))
+      (should (equal (smart-bury-test-report-repeatable 'split-window-right t)
+                     (smart-bury-test-positions
+                      (1- (smart-bury-test-total)) 1))))))
+
+(ert-deftest smart-bury-test-mode-reports-before-repeat-mode ()
+  "`smart-bury-mode' runs its report hook before `repeat-mode's, which
+appends its hint to the message, even when enabled first; disabling
+the mode removes the hook."
+  (skip-unless (fboundp 'repeat-mode))
+  (let ((repeat-was-on (bound-and-true-p repeat-mode)))
+    (unwind-protect
+        (progn
+          (repeat-mode -1)
+          (smart-bury-test-with-mode
+            (repeat-mode 1)
+            (let ((hook (default-value 'post-command-hook)))
+              (should (< (cl-position #'smart-bury--report-repeatable hook)
+                         (cl-position #'repeat-post-hook hook)))))
+          (should-not (memq #'smart-bury--report-repeatable
+                            (default-value 'post-command-hook))))
+      (repeat-mode (if repeat-was-on 1 -1)))))
+
 ;;; README Introduction cases
 
 ;; Each test below replays one **Case** from the Introduction of

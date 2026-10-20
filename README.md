@@ -328,7 +328,9 @@ stays until the next key, which ends the sequence unless it calls a
 *smart bury* command: while the message shows, the sequence is still
 going, e.g., after stopping for a while to read a buffer.  (With
 *repeat mode*, its own hint follows: `Smart Bury: 3/7 [Repeat with _,
-M-_, M--]`.)
+M-_, M--]`.)  With *repeat mode*, a [repeatable
+command](#repeatable-commands) such as `C-x 3` reports `1/7` as well:
+the next key starts a sequence from the current buffer, at position 1.
 
 The label “Smart Bury:” is in face `smart-bury-message-prefix` (which
 inherits `font-lock-type-face`, green in the default theme).  To turn
