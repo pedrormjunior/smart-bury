@@ -320,10 +320,19 @@ another one.
 
 ### Messages
 
-Each command reports where it landed in the echo area, labeled
-“Smart Bury:” in face `smart-bury-message-prefix` (which inherits
-`font-lock-type-face`, green in the default theme).
-To turn these messages off:
+Each command shows in the echo area its position in the sequence,
+e.g., `Smart Bury: 3/7`: the current buffer is the 3rd of the 7
+buffers the sequence goes through, counting the buffer it started
+from as the 1st (so the *other buffer* is the 2nd).  The message
+stays until the next key, which ends the sequence unless it calls a
+*smart bury* command: while the message shows, the sequence is still
+going, e.g., after stopping for a while to read a buffer.  (With
+*repeat mode*, its own hint follows: `Smart Bury: 3/7 [Repeat with _,
+M-_, M--]`.)
+
+The label “Smart Bury:” is in face `smart-bury-message-prefix` (which
+inherits `font-lock-type-face`, green in the default theme).  To turn
+these messages off:
 
 ```elisp
 (setopt smart-bury-messages nil)

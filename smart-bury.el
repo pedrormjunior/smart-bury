@@ -105,9 +105,12 @@ selected window may end up showing the same buffer as another one."
   :group 'smart-bury)
 
 (defcustom smart-bury-messages t
-  "Whether Smart Bury commands report where they landed.
-When non-nil, each command called interactively shows a short message
-in the echo area, e.g. the buffer it switched to."
+  "Whether Smart Bury commands report their position in the sequence.
+When non-nil, each command called interactively shows in the echo area
+where the current buffer is in the sequence, out of how many buffers it
+goes through, e.g. \"Smart Bury: 3/7\".  The message stays until the
+next key, which ends the sequence unless it calls a Smart Bury command,
+so the message also shows that the sequence is still going."
   :type 'boolean
   :group 'smart-bury)
 
@@ -183,6 +186,18 @@ it would make every later call skip a buffer, and
                allow-current
              (or smart-bury-include-displayed-buffers
                  (eq buffer smart-bury--initial-buffer))))))
+
+(defun smart-bury--position (depth)
+  "Return \"POSITION/TOTAL\" for a buffer DEPTH buffers deep.
+DEPTH counts the sequence's initial buffer as 1, so the other buffer is
+2.  TOTAL is the number of buffers the sequence goes through: the
+eligible ones (see `smart-bury--eligible-p'), the current one included.
+Past TOTAL, POSITION wraps around, as the sequence does."
+  (let ((total (max 1 (length (seq-filter
+                               (lambda (buffer)
+                                 (smart-bury--eligible-p buffer t))
+                               (smart-bury--buffer-list))))))
+    (format "%d/%d" (1+ (mod (1- depth) total)) total)))
 
 (defun smart-bury--select-buffers (buffers n &optional allow-current)
   "Return the first N eligible buffers of BUFFERS.
@@ -266,8 +281,8 @@ the buffers on the way."
     (setq smart-bury--counter 1))
   (smart-bury--switch-to-buffer
    (smart-bury--go-through-buffers (cdr (smart-bury--buffer-list))))
-  (smart-bury--report "buffer %d — %s" smart-bury--counter (buffer-name))
-  (setq smart-bury--counter (1+ smart-bury--counter)))
+  (setq smart-bury--counter (1+ smart-bury--counter))
+  (smart-bury--report "%s" (smart-bury--position smart-bury--counter)))
 
 (defun smart-bury-switch-to-other-buffer nil
   "Smartly switch to the other buffer.
@@ -285,8 +300,9 @@ repeatedly therefore alternates back and forth between the two."
   (smart-bury--walk-back
    (smart-bury--select-buffers (cdr (smart-bury--buffer-list))
                                (1- smart-bury--counter)))
-  (smart-bury--report "switched to %s" (buffer-name))
-  (setq smart-bury--counter 2))
+  (setq smart-bury--counter 2)
+  (smart-bury--report "%s" (smart-bury--position
+                            (if (smart-bury--is-initial-p) 1 2))))
 
 (defun smart-bury-bury-buffer (&optional buffer-or-name)
   "Smartly put buffer at the end of the list of all buffers.
@@ -296,7 +312,7 @@ the next buffer.
 For more documentation, see `bury-buffer'."
   (interactive "P")
   (smart-bury--run-function 'bury-buffer buffer-or-name)
-  (smart-bury--report "buried, now at %s" (buffer-name)))
+  (smart-bury--report "%s" (smart-bury--position smart-bury--counter)))
 
 (defun smart-bury--wrapper-name (fn)
   "Return the symbol `smart-bury-FN' for vanilla command FN."
@@ -325,7 +341,7 @@ not be defined yet (nor its library loaded) when the wrapper is."
      `(lambda (&rest args)
         (interactive (smart-bury--interactive-args ',fn))
         (apply #'smart-bury--run-function ',fn args)
-        (smart-bury--report "ran `%s', now at %s" ',fn (buffer-name)))
+        (smart-bury--report "%s" (smart-bury--position smart-bury--counter)))
      t)
     (format "Smartly call `%s' and switch to the next buffer.\n\nFor more documentation, see `%s'." fn fn)))
 

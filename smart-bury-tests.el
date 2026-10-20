@@ -455,9 +455,23 @@ order."
        ,@body)
      (nreverse messages)))
 
+(defun smart-bury-test-total ()
+  "Return how many buffers a sequence goes through in the test session.
+With a single window, that is every buffer but the internal ones,
+whose names start with a space."
+  (length (seq-remove (lambda (buffer)
+                        (string-prefix-p " " (buffer-name buffer)))
+                      (buffer-list))))
+
+(defun smart-bury-test-positions (total &rest positions)
+  "Return the messages expected for POSITIONS, each out of TOTAL."
+  (mapcar (lambda (position)
+            (format "Smart Bury: %d/%d" position total))
+          positions))
+
 (ert-deftest smart-bury-test-messages-labelled-in-face ()
-  "A command reports where it landed, with the \"Smart Bury:\" label in
-face `smart-bury-message-prefix'."
+  "A command reports its position in the sequence, with the
+\"Smart Bury:\" label in face `smart-bury-message-prefix'."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
     (switch-to-buffer b)
     (switch-to-buffer a)
@@ -466,9 +480,61 @@ face `smart-bury-message-prefix'."
                        (let ((last-command 'self-insert-command))
                          (smart-bury-switch-to-other-buffer)))))
       (should (equal (mapcar #'substring-no-properties messages)
-                     '("Smart Bury: switched to sb-b")))
+                     (smart-bury-test-positions (smart-bury-test-total) 2)))
       (should (eq (get-text-property 0 'face (car messages))
                   'smart-bury-message-prefix)))))
+
+(ert-deftest smart-bury-test-messages-positions-switching ()
+  "Switching through buffers reports positions 2, 3... wrapping around
+to 1 back on the initial buffer; switching to the other buffer
+reports 1 on the initial buffer and 2 on the other one."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
+    (dolist (buffer (list c b a))
+      (switch-to-buffer buffer))
+    (let* ((smart-bury-messages t)
+           (total (smart-bury-test-total))
+           (messages
+            (smart-bury-test-capturing-messages
+              (let ((last-command 'self-insert-command))
+                (smart-bury-switch-through-buffers))
+              ;; On through every buffer, back to A.
+              (dotimes (_ (1- total))
+                (let ((last-command 'smart-bury-switch-through-buffers))
+                  (smart-bury-switch-through-buffers)))
+              (let ((last-command 'smart-bury-switch-through-buffers))
+                (smart-bury-switch-through-buffers)
+                (smart-bury-switch-through-buffers)
+                (smart-bury-switch-to-other-buffer)
+                (smart-bury-switch-to-other-buffer)))))
+      (should (eq (current-buffer) b))
+      (should (equal (mapcar #'substring-no-properties messages)
+                     (append (apply #'smart-bury-test-positions total
+                                    (number-sequence 2 total))
+                             (smart-bury-test-positions total 1 2 3 1 2)))))))
+
+(ert-deftest smart-bury-test-messages-positions-burying-and-killing ()
+  "Burying reports the position the sequence lands on: 1 when it starts
+a sequence, the depth reached when it continues one.  Killing a buffer
+lowers the total."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
+    (dolist (buffer (list c b a))
+      (switch-to-buffer buffer))
+    (let* ((smart-bury-messages t)
+           (total (smart-bury-test-total))
+           (messages
+            (smart-bury-test-capturing-messages
+              (let ((last-command 'self-insert-command))
+                (smart-bury-bury-buffer))
+              (let ((last-command 'smart-bury-bury-buffer))
+                (smart-bury-bury-buffer))
+              (let ((last-command 'self-insert-command))
+                (smart-bury-switch-through-buffers))
+              (let ((last-command 'smart-bury-switch-through-buffers))
+                (smart-bury-switch-through-buffers)
+                (smart-bury-kill-current-buffer)))))
+      (should (equal (mapcar #'substring-no-properties messages)
+                     (append (smart-bury-test-positions total 1 1 2 3)
+                             (smart-bury-test-positions (1- total) 3)))))))
 
 (ert-deftest smart-bury-test-messages-disabled ()
   "With `smart-bury-messages' nil, commands report nothing."
