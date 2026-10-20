@@ -115,6 +115,7 @@ SIDE_X = 7.11 - MARGIN - KEYS_BOX_WIDTH / 2
 KEYS_Y = 0.2
 CAPTION_Y = -3.3
 KEYS_FONT_SIZE = 26
+MINIBUFFER_FONT_SIZE = 20   # fits Smart Bury's message and repeat-mode's hint
 KEYS_GAP = 0.12
 KEY_ROOM = 0.1   # extra room on each side of a key box in running text
 
@@ -375,14 +376,16 @@ class SmartBuryIntro(Scene):
         so that transforming from it doesn't start from a stray point.
         """
         if not prompt:
-            placeholder = Text("_", font=MONO, font_size=22).set_opacity(0)
+            placeholder = Text("_", font=MONO,
+                               font_size=MINIBUFFER_FONT_SIZE).set_opacity(0)
             return self.at_minibuffer(VGroup(placeholder))
         # Without input, an invisible "M" holds the cursor's cell, one
         # space after the prompt's colon.
         line = MarkupText(f'<span foreground="{PROMPT_COLOR}">'
                           f'{escape(prompt)}</span>{escape(typed or "M")}',
-                          font=MONO, font_size=22, color=DIM_COLOR)
-        cursor = Rectangle(width=0.16, height=0.3, color=DIM_COLOR,
+                          font=MONO, font_size=MINIBUFFER_FONT_SIZE,
+                          color=DIM_COLOR)
+        cursor = Rectangle(width=0.145, height=0.27, color=DIM_COLOR,
                            fill_opacity=0.9, stroke_width=0)
         if typed:
             cursor.next_to(line, RIGHT, buff=0.05)
@@ -395,16 +398,22 @@ class SmartBuryIntro(Scene):
             cursor.set_y(line[0].get_center()[1])
         return self.at_minibuffer(VGroup(line, cursor))
 
-    def repeat_message(self) -> VGroup:
-        """`repeat-mode's echo after a Smart Bury command.
+    def repeat_message(self, report: str | None = None) -> VGroup:
+        """The echo area after a command arming the repeat map.
 
-        The keys are in REPEAT_KEYS's order, as in the real message, in
-        key boxes like Emacs' `help-key-binding' face.
+        Smart Bury's message reporting REPORT (e.g. "2/5"), if any, its
+        label in a face of its own, then `repeat-mode's hint, which
+        `repeat-mode' appends to the current message.  The hint's keys
+        are in REPEAT_KEYS's order, as in the real message, in key boxes
+        like Emacs' `help-key-binding' face.
         """
         keys = ", ".join(f"`{key}`" for key in REPEAT_KEYS)
+        text = f"[Repeat with: {keys}]"
+        if report:
+            text = f"{{Smart Bury:}} {report} {text}"
         return self.at_minibuffer(
-            rich_text(f"[Repeat with: {keys}]", font_size=22,
-                      color=DIM_COLOR, font=MONO))
+            rich_text(text, font_size=MINIBUFFER_FONT_SIZE, color=DIM_COLOR,
+                      font=MONO))
 
     def build_frame(self) -> None:
         """The Emacs frame: the window, its mode line, and the minibuffer."""
@@ -587,13 +596,15 @@ class SmartBuryIntro(Scene):
         self.remove(*halos)
 
     def message_key(self, key: str) -> VGroup:
-        """A copy of repeat-mode message's KEY box, laid exactly over it.
+        """A copy of repeat-mode hint's KEY box, laid exactly over it.
 
+        The message shown is the last command's (see `repeat_message').
         Animating the copy (glow, wiggle) leaves the message untouched;
         the copy is removed afterward.
         """
-        target = self.repeat_message()[0][REPEAT_KEYS.index(key)]
-        overlay = key_box(key, font_size=22)
+        target = self.repeat_message(self.sim.report)[0][
+            REPEAT_KEYS.index(key)]
+        overlay = key_box(key, font_size=MINIBUFFER_FONT_SIZE)
         overlay.shift(target.get_center() - overlay[0][0].get_center())
         self.add(overlay)
         return overlay
@@ -638,7 +649,7 @@ class SmartBuryIntro(Scene):
         action()
         if expect is not None:
             self.expect(expect, keys)
-        self.update_stage(old, self.repeat_message(),
+        self.update_stage(old, self.repeat_message(self.sim.report),
                           run_time=0.55 if fast else 1.0, extra=wiggles)
         if repeating:
             self.glow_off(glowing, halos)
@@ -764,7 +775,7 @@ class SmartBuryIntro(Scene):
             Create(self.divider),
             FadeIn(self.right_mode_line), FadeIn(self.right_mode_line_label),
             FadeIn(self.right_body, shift=LEFT * 0.3),
-            Transform(self.minibuffer, self.repeat_message()),
+            Transform(self.minibuffer, self.repeat_message(self.sim.report)),
             *self.split_markers(),
             run_time=1.0)
         self.wait(max(1.0, 0.15 * len(caption.split())))

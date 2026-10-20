@@ -79,6 +79,9 @@ class SmartBury:
         self.initial: str | None = None  # `smart-bury--initial-buffer'
         self.last_command = WORK  # `last-command'
         self.others: list[str] = []  # shown in the other windows
+        # What the last command reported (`smart-bury--report'), e.g.
+        # "3/5"; None after any other command.
+        self.report: str | None = None
         self.steps: list[Step] = []
 
     @property
@@ -140,6 +143,11 @@ class SmartBury:
         for buffer in reversed(selection):
             self._switch(buffer)
 
+    def _position(self, depth: int) -> str:
+        """`smart-bury--position': "POSITION/TOTAL" for DEPTH."""
+        total = max(1, sum(1 for b in self.blist if self._eligible_p(b, True)))
+        return f"{(depth - 1) % total + 1}/{total}"
+
     def _go_through_buffers(
         self, buffers: list[str], allow_current: bool = False
     ) -> str:
@@ -163,8 +171,10 @@ class SmartBury:
 
     # Commands
 
-    def _record(self, keys: str, command: str, caption: str) -> Step:
+    def _record(self, keys: str, command: str, caption: str,
+                report: str | None = None) -> Step:
         self.last_command = command
+        self.report = report
         step = Step(keys, command, caption, tuple(self.blist),
                     self.initial, self.counter, tuple(self.others))
         self.steps.append(step)
@@ -175,22 +185,24 @@ class SmartBury:
             self.counter = 1
         self._switch(self._go_through_buffers(self.blist[1:]))
         self.counter += 1
-        return self._record(keys, SWITCH_THROUGH, caption)
+        return self._record(keys, SWITCH_THROUGH, caption,
+                            self._position(self.counter))
 
     def switch_to_other(self, keys: str = "M-_", caption: str = "") -> Step:
         self.counter = (2 if self._maybe_restart_sequence()
                         else max(2, self.counter))
         self._walk_back(self._select_buffers(self.blist[1:], self.counter - 1))
         self.counter = 2
-        return self._record(keys, SWITCH_TO_OTHER, caption)
+        return self._record(keys, SWITCH_TO_OTHER, caption,
+                            self._position(1 if self._is_initial_p() else 2))
 
     def bury(self, keys: str = "M--", caption: str = "") -> Step:
         self._run_function(self._bury)
-        return self._record(keys, BURY, caption)
+        return self._record(keys, BURY, caption, self._position(self.counter))
 
     def quit(self, keys: str = "q", caption: str = "") -> Step:
         self._run_function(self._bury)
-        return self._record(keys, QUIT, caption)
+        return self._record(keys, QUIT, caption, self._position(self.counter))
 
     def switch_to_buffer(self, name: str, keys: str = "C-x b",
                          caption: str = "") -> Step:
@@ -205,9 +217,17 @@ class SmartBury:
         """`split-window-right' (or COMMAND, e.g. `split-window-below'):
         the new window shows the current buffer too, and the selected
         window stays selected.  Not a Smart Bury command, so the next
-        Smart Bury command starts a new sequence."""
+        Smart Bury command starts a new sequence.
+
+        As a repeatable command, with `repeat-mode' on (as in the
+        demos), it reports position 1, out of the buffers a sequence from
+        the current buffer goes through (see
+        `smart-bury--report-repeatable')."""
         self.others.append(self.current)
-        return self._record(keys, command, caption)
+        saved, self.initial = self.initial, self.current
+        report = self._position(1)
+        self.initial = saved
+        return self._record(keys, command, caption, report)
 
     def work(self, caption: str = "") -> Step:
         """Any non-Smart Bury command, which ends the current sequence."""
@@ -346,6 +366,27 @@ def check() -> list[str]:
     _expect("C-x b then C-x _", (sb.current, sb.initial), ("B", "D"),
             failures)
 
+    # Reported positions, as in the `smart-bury-test-messages-positions-*'
+    # tests: switching through wraps around to 1 back on the initial
+    # buffer, switching to the other buffer alternates 1 and 2, and
+    # burying in a fresh sequence stays at 1.
+    sb = SmartBury(BUFFERS)
+    reports = []
+    for command in [sb.switch_through] * 7 + [sb.switch_to_other] * 2:
+        command()
+        reports.append(sb.report)
+    _expect("reports switching", reports,
+            ["2/5", "3/5", "4/5", "5/5", "1/5", "2/5", "3/5", "1/5", "2/5"],
+            failures)
+    sb = SmartBury(BUFFERS)
+    reports = []
+    for command in [sb.bury, sb.bury, sb.work, sb.switch_through,
+                    sb.switch_through]:
+        command()
+        reports.append(sb.report)
+    _expect("reports burying", reports, ["1/5", "1/5", None, "2/5", "3/5"],
+            failures)
+
     # Right after splitting the window, the initial buffer, still shown in
     # the other window, keeps its place in the sequence (as in the test
     # `smart-bury-test-sequence-with-initial-buffer-in-other-window').
@@ -364,6 +405,7 @@ def check() -> list[str]:
     sb = SmartBury(["A", "C", "D", "E", "B"])
     sb.split_window()
     _expect("intro split other", sb.other, "C", failures)
+    _expect("intro split report", sb.report, "1/5", failures)
     sb.switch_through()
     _expect("intro split _", order(sb), "CADEB", failures)
     _expect("intro split _ other", sb.other, "D", failures)
