@@ -189,6 +189,18 @@ Signal a `user-error' when there are no eligible buffers at all."
       (cl-loop for i below n
                collect (nth (mod i count) eligible)))))
 
+(defun smart-bury--switch-to-buffer (buffer)
+  "Switch to BUFFER in the selected window, ignoring display actions.
+Like `switch-to-buffer', but even when
+`switch-to-buffer-obey-display-actions' is non-nil, BUFFER's display
+action (e.g. from `display-buffer-alist') is not applied: a sequence
+switches buffers in the selected window, and passes through buffers
+it does not stop at, so an action deleting other windows, or showing
+BUFFER in another window or frame, would break the sequence and the
+window layout.  Return BUFFER."
+  (let ((switch-to-buffer-obey-display-actions nil))
+    (switch-to-buffer buffer)))
+
 (defun smart-bury--walk-back (selection)
   "Switch to each buffer of SELECTION in reverse order.
 The first buffer of SELECTION thus ends up current, and the
@@ -198,7 +210,7 @@ if the user had never left it.  This is what lets
 after a run of `smart-bury-switch-through-buffers' calls, with the
 \"list of all buffers\" as it was before -- so callers must never
 skip these intermediate switches by jumping straight to a buffer."
-  (mapc #'switch-to-buffer (reverse selection)))
+  (mapc #'smart-bury--switch-to-buffer (reverse selection)))
 
 (defun smart-bury--go-through-buffers (buffers &optional allow-current)
   "Go through `smart-bury--counter' buffers of BUFFERS.
@@ -226,7 +238,7 @@ Unless this call starts a fresh Smart Bury sequence, switch through
       (setq smart-bury--counter 1))
     (if starts-now
         (setq smart-bury--initial-buffer (current-buffer))
-      (let ((last-buf (switch-to-buffer
+      (let ((last-buf (smart-bury--switch-to-buffer
                        (smart-bury--go-through-buffers
                         (smart-bury--buffer-list)
                         'allow-current))))
@@ -241,7 +253,7 @@ the buffers on the way."
   (interactive)
   (when (smart-bury--maybe-restart-sequence)
     (setq smart-bury--counter 1))
-  (switch-to-buffer
+  (smart-bury--switch-to-buffer
    (smart-bury--go-through-buffers (cdr (smart-bury--buffer-list))))
   (smart-bury--report "buffer %d — %s" smart-bury--counter (buffer-name))
   (setq smart-bury--counter (1+ smart-bury--counter)))

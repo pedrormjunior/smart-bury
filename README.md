@@ -296,6 +296,15 @@ customize `smart-bury-same-frame`, e.g.:
 (setopt smart-bury-same-frame nil)
 ```
 
+### Display actions
+
+*Smart Bury* always switches buffers in the selected window, ignoring
+display actions even when `switch-to-buffer-obey-display-actions` is
+non-nil.  Otherwise, a `display-buffer-alist` rule (e.g., one showing a
+buffer in the full frame) would apply to every buffer a sequence merely
+passes through, deleting other windows or moving the sequence to
+another one.
+
 ### Messages
 
 Each command reports where it landed in the echo area, labeled

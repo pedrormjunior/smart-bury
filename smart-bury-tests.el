@@ -304,6 +304,44 @@ needs the real `buffer-list'."
       (smart-bury-switch-to-other-buffer))
     (should (eq (current-buffer) a))))
 
+(ert-deftest smart-bury-test-switching-ignores-display-actions ()
+  "Switching through buffers ignores `display-buffer-alist', even with
+`switch-to-buffer-obey-display-actions' non-nil.
+
+Regression test: Smart Bury switches with `switch-to-buffer', which
+then obeyed the display action of every buffer passed through, so one
+shown in the full frame deleted the other window of a split, and the
+sequence went on in whatever window the action chose."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c") (d "sb-d"))
+    (delete-other-windows)
+    (dolist (buffer (list d c b a))
+      (switch-to-buffer buffer))
+    (split-window-right)
+    (let ((window (selected-window))
+          (switch-to-buffer-obey-display-actions t)
+          ;; C is to be shown in the full frame.
+          (display-buffer-alist
+           `((,(concat "\\`" (regexp-quote (buffer-name c)) "\\'")
+              ,(lambda (buffer alist)
+                 (delete-other-windows)
+                 (display-buffer-same-window buffer alist))))))
+      (let ((last-command 'some-other-command))
+        (smart-bury-switch-through-buffers))
+      (let ((last-command 'smart-bury-switch-through-buffers))
+        (smart-bury-switch-through-buffers))
+      ;; Landing on C...
+      (should (eq (current-buffer) c))
+      (should (= (length (window-list)) 2))
+      (let ((last-command 'smart-bury-switch-through-buffers))
+        (smart-bury-switch-through-buffers))
+      ;; ...and passing through it again on the way to D.
+      (should (eq (current-buffer) d))
+      (should (= (length (window-list)) 2))
+      (should (eq (selected-window) window))
+      (let ((last-command 'smart-bury-switch-through-buffers))
+        (smart-bury-switch-to-other-buffer))
+      (should (eq (current-buffer) a)))))
+
 (ert-deftest smart-bury-test-switch-to-other-buffer-alternates-back-and-forth ()
   "A fresh call to `smart-bury-switch-to-other-buffer' switches to the
 \"other\" buffer; calling it again (continuing the sequence) switches
