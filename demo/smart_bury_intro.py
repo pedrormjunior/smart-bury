@@ -1300,26 +1300,6 @@ class SmartBuryIntro(Scene):
             expect="ABCDE",
             fast=True,
         )
-        self.press(
-            "_",
-            self.sim.switch_through,
-            "(Let’s get back to E.)",
-            expect="BACDE",
-            fast=True,
-        )
-        self.press("_", self.sim.switch_through, expect="CABDE", fast=True)
-        self.press("_", self.sim.switch_through, expect="DABCE", fast=True)
-        self.press("_", self.sim.switch_through, expect="EABCD")
-        self.work(
-            "Typing, or any other command, ends the sequence.",
-            expect="EABCD",
-        )
-        self.press(
-            "C-x M--",
-            self.sim.bury,
-            "(Let’s bury E with `C-x M--`.)",
-            expect="ABCDE",
-        )
 
     def switching_to_other(self) -> None:
         self.press(
