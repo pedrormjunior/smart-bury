@@ -144,8 +144,9 @@ def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
 
     `KEYS` is a key (or key sequence) drawn in a monospace key box,
     ~TEXT~ is italic, and {SYMBOL} is a monospace symbol in the
-    highlight color.  The key spans are (start, end) offsets into the
-    plain text.
+    highlight color.  A buffer's name standing alone (e.g. "back to
+    A.") is in the buffer's color, as its box in the list.  The key
+    spans are (start, end) offsets into the plain text.
     """
     plain, markup, keys = "", "", []
     italic = False
@@ -174,6 +175,14 @@ def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
         elif char == "~":
             markup += "</i>" if italic else "<i>"
             italic = not italic
+            i += 1
+        elif (char in COLORS
+              and not (i > 0 and (text[i - 1].isalnum()
+                                  or text[i - 1] in "-_"))
+              and not (i + 1 < len(text) and (text[i + 1].isalnum()
+                                              or text[i + 1] in "-_"))):
+            plain += char
+            markup += f'<span foreground="{COLORS[char]}">{char}</span>'
             i += 1
         else:
             plain += char
