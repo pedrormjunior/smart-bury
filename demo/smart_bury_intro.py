@@ -879,23 +879,29 @@ class SmartBuryIntro(Scene):
         if wait > 0:
             self.wait(wait)
 
-    def work(self, caption: str, expect: str | None = None,
+    def work(self, caption: str | None = None, expect: str | None = None,
              pace: float = 1.0) -> None:
         """Any other command (e.g. typing), which ends the sequence and
-        clears `repeat-mode's message.  PACE scales every duration but the
-        caption's fade (see `press')."""
-        self.say(caption, wait=0)
+        clears `repeat-mode's message.  Without CAPTION, the one shown
+        stays.  PACE scales every duration but the caption's fade (see
+        `press')."""
+        if caption is not None:
+            self.say(caption, wait=0)
         self.sim.work()
         if expect is not None:
             self.expect(expect, "work")
         # "typing…" appears in the window, in place of its first line, and
-        # the whole Emacs frame briefly swells: the sequence is broken.
+        # in the keys panel, while the whole Emacs frame briefly swells:
+        # the sequence is broken.
         line = self.window_body[0]
         typing = Text("typing…", font_size=32, slant="ITALIC", color=DIM_COLOR)
         typing.move_to(line.get_start(), aligned_edge=LEFT)
+        typed = Text("typing…", font_size=24, slant="ITALIC", color=DIM_COLOR)
+        typed.move_to(self.keys_box)
         animations = self.keys_clear() + [
             line.animate.set_stroke(opacity=0),
             FadeIn(typing),
+            FadeIn(typed),
             Transform(self.minibuffer, self.minibuffer_label()),
         ]
         if self.state_visible:
@@ -916,6 +922,7 @@ class SmartBuryIntro(Scene):
         self.wait(0.4 * pace)
         self.play(
             FadeOut(typing),
+            FadeOut(typed),
             line.animate.set_stroke(opacity=LINE_OPACITY),
             run_time=0.4 * pace,
         )
@@ -1284,7 +1291,7 @@ class SmartBuryIntro(Scene):
         # Burying right away would continue the switching sequence (smart
         # burying goes on from its depth); working first makes the buries
         # a fresh sequence that cycles through every buffer.
-        self.work('(Any typing in "A" ends the sequence.)', expect="ABCDE")
+        self.work(expect="ABCDE")
         self.press(
             "C-x M--",
             self.sim.bury,
@@ -1297,11 +1304,11 @@ class SmartBuryIntro(Scene):
             "Each further `M--` does the same…",
             expect="CDEAB",
             fast=True,
-            pace=0.35,
+            pace=0.5,
         )
         for order in ("DEABC", "EABCD", "ABCDE"):
             self.press("M--", self.sim.bury, expect=order, fast=True,
-                       pace=0.35)
+                       pace=0.5)
 
     def switching_through(self) -> None:
         self.counter_text.become(self.counter_label(self.sim.counter))
@@ -1343,6 +1350,9 @@ class SmartBuryIntro(Scene):
             expect="ABCDE",
             fast=True,
         )
+        # Typing in A, uncaptioned, ends this part: a pause before the
+        # next subject.
+        self.work(expect="ABCDE")
 
     def switching_to_other(self) -> None:
         self.press(
@@ -1410,8 +1420,7 @@ class SmartBuryIntro(Scene):
             pace=0.8,
         )
         self.press("_", self.sim.switch_through, expect="BCADE", pace=0.8)
-        self.work("Some typing there ends the sequence.", expect="BCADE",
-                  pace=0.85)
+        self.work(expect="BCADE", pace=0.85)
         self.press(
             "C-x _",
             self.sim.switch_through,
@@ -1421,9 +1430,11 @@ class SmartBuryIntro(Scene):
             pace=0.78,
         )
         self.press("_", self.sim.switch_through, expect="ABCDE", pace=0.78)
+        # Typing in A (the burying part's start) follows soon, under this
+        # caption, so its narration ends about when the typing starts.
         self.say(
             "(This way we easily cycle among 3 buffers.)",
-            wait=2.5,
+            wait=0.5,
         )
 
     def why_smart(self) -> None:
@@ -1457,17 +1468,10 @@ class SmartBuryIntro(Scene):
         """C-x 3 arms the repeat map, so `_' right away fills the selected
         window with another buffer; the initial buffer, still shown in the
         right window, keeps its place in the sequence."""
-        # The footnote stays from C-x 3's caption through the next one.
-        footnote = "^ See {smart-bury-repeatable-commands}"
         self.split_window_right(
-            "`C-x 3`^ splits the window…",
+            "`C-x 3`^ splits the window and arms the repeat map.",
             expect="ACDEB",
-            footnote=footnote,
-        )
-        self.say(
-            "…and it arms the repeat map.",
-            wait=2.2,
-            footnote=footnote,
+            footnote="^ See {smart-bury-repeatable-commands}",
         )
         self.press(
             "_",
