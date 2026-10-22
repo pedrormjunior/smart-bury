@@ -579,7 +579,8 @@ class SmartBuryIntro(Scene):
         self.keys_box.move_to(RIGHT * SIDE_X + UP * KEYS_Y)
         keys_title.next_to(self.keys_box, UP, buff=0.12)
         self.keys_panel = VGroup(keys_title, self.keys_box)
-        state_title = Text("Smart Bury state", font_size=22, color=DIM_COLOR)
+        self.state_title = state_title = Text(
+            "Smart Bury state", font_size=22, color=DIM_COLOR)
         state_title.move_to(RIGHT * SIDE_X + UP * (KEYS_Y - 1.25))
         self.counter_text = self.counter_label(self.sim.counter)
         self.state_panel = VGroup(state_title, self.counter_text)
@@ -723,6 +724,20 @@ class SmartBuryIntro(Scene):
             RIGHT * x + UP * INITIAL_Y
         ).set_opacity(1)
 
+    def state_animations(self) -> list:
+        """Animations showing Smart Bury's state (its panel, the counter,
+        and the "initial" marker) only while a sequence is active, i.e.
+        right after a Smart Bury command."""
+        active = self.sim.last_command in SMART_COMMANDS
+        opacity = 1.0 if active else 0.0
+        return [
+            Transform(self.counter_text,
+                      self.counter_label(self.sim.counter)
+                      .set_opacity(opacity)),
+            self.state_title.animate.set_opacity(opacity),
+            self.initial_marker_target(visible=active),
+        ]
+
     def update_stage(
         self,
         old: list[str],
@@ -747,14 +762,7 @@ class SmartBuryIntro(Scene):
         if self.sim.others:
             animations += self.split_markers()
         if self.state_visible:
-            animations += [
-                Transform(
-                    self.counter_text, self.counter_label(self.sim.counter)
-                ),
-                self.initial_marker_target(
-                    visible=self.sim.last_command in SMART_COMMANDS
-                ),
-            ]
+            animations += self.state_animations()
         animations.append(Transform(self.minibuffer, minibuffer))
         self.play(*animations, run_time=run_time)
 
@@ -934,7 +942,7 @@ class SmartBuryIntro(Scene):
             Transform(self.minibuffer, self.minibuffer_label()),
         ]
         if self.state_visible:
-            animations.append(self.initial_marker.animate.set_opacity(0))
+            animations += self.state_animations()
         self.play(*animations, run_time=0.6 * pace)
         frame = VGroup(
             self.frame_outline,
@@ -1053,6 +1061,8 @@ class SmartBuryIntro(Scene):
             FadeIn(self.right_body, shift=LEFT * 0.3),
             Transform(self.minibuffer, self.repeat_message(self.sim.report)),
             *self.split_markers(),
+            # C-x 3 is not a Smart Bury command: no sequence is active.
+            *(self.state_animations() if self.state_visible else []),
             run_time=1.0,
         )
         self.wait(max(1.0, 0.15 * len(caption.split())))
@@ -1155,7 +1165,7 @@ class SmartBuryIntro(Scene):
             ),
             self.command_row(
                 "C-x M-_",
-                "Go back to where the sequence started, or to "
+                "Go back to where the ~sequence~ started, or to "
                 "the ~other buffer~.",
                 "smart-bury-switch-to-other-buffer",
             ),
@@ -1196,7 +1206,7 @@ class SmartBuryIntro(Scene):
             hold=3.5,
             captions=(
                 "Smart Bury has three basic commands:",
-                "switch through buffers, switch to the ~other~, and bury,",
+                "switch through buffers, switch to the ~other buffer~, and bury,",
                 "which {smart-bury-mode} binds.",
             ),
         )
@@ -1267,7 +1277,7 @@ class SmartBuryIntro(Scene):
         self.build_side()
 
         self.say(
-            "Emacs keeps a “list of all buffers” (most recently used first).",
+            "Emacs keeps a “list of all buffers”.",
             wait=0,
         )
         # The Emacs frame and the keys panel appear with the list.
@@ -1312,7 +1322,7 @@ class SmartBuryIntro(Scene):
         )
         self.switch_to_buffer(
             "C",
-            '`C-x b` and typing "C".',
+            '`C-x b` and typing "C", in this case.',
             expect="CABDE",
         )
         self.switch_to_buffer(
@@ -1365,21 +1375,27 @@ class SmartBuryIntro(Scene):
     def switching_through(self) -> None:
         self.counter_text.become(self.counter_label(self.sim.counter))
         self.say(
-            "Smart Bury remembers where a sequence started, "
+            "Smart Bury remembers where a ~sequence~ started, "
             "and how deep it is.",
             wait=0,
         )
-        # The "initial" marker as the caption starts, the counter (with
-        # the state panel) when its narration gets to "how deep it is".
+        # Each shown briefly as the narration names it: the "initial"
+        # marker, under A, at "where a sequence started"; the counter (with
+        # the state panel) just before "how deep it is".  From then on
+        # they show only while a sequence is active (`state_animations').
         self.state_visible = True
-        self.play(
-            self.initial_marker_target(visible=True),
-            *self.keys_clear(),
-            run_time=0.6,
-        )
-        self.cue("how deep")
-        self.play(FadeIn(self.state_panel), run_time=0.6)
-        self.wait(0.7)
+        self.add(self.state_panel.set_opacity(0))
+        self.initial_marker.move_to(RIGHT * slot_position(0)[0]
+                                    + UP * INITIAL_Y)
+        self.cue("where")
+        self.play(self.initial_marker.animate.set_opacity(1),
+                  *self.keys_clear(), run_time=0.4)
+        self.wait(0.6)
+        self.play(self.initial_marker.animate.set_opacity(0), run_time=0.4)
+        self.cue("how deep", lead=0.3)
+        self.play(self.state_panel.animate.set_opacity(1), run_time=0.4)
+        self.wait(0.8)
+        self.play(self.state_panel.animate.set_opacity(0), run_time=0.4)
         self.press(
             "C-x _",
             self.sim.switch_through,
@@ -1396,7 +1412,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "_",
             self.sim.switch_through,
-            'Once in "E", "A" "B" "C" "D" stay in order.',
+            'Once in "E", initial buffer "A" is the ~other buffer~.',
             expect="EABCD",
         )
         self.press(
@@ -1406,9 +1422,9 @@ class SmartBuryIntro(Scene):
             expect="ABCDE",
             fast=True,
         )
-        # Typing in A, uncaptioned, ends this part: a pause before the
-        # next subject.
-        self.work(expect="ABCDE")
+        # Typing in A ends this part: the first sequence break.
+        self.work("Typing, or any other command, ends the ~sequence~.",
+                  expect="ABCDE")
 
     def switching_to_other(self) -> None:
         self.press(
@@ -1433,6 +1449,8 @@ class SmartBuryIntro(Scene):
     def breaking_the_sequence(self) -> None:
         # repeat-mode is still active from the previous part, so a plain
         # `_' continues the same key sequence.
+        # The footnote stays through the next caption too.
+        repeat_note = "^ Repeat map still active"
         self.press(
             "_",
             self.sim.switch_through,
@@ -1440,11 +1458,8 @@ class SmartBuryIntro(Scene):
             expect="BACDE",
             fast=True,
             pace=0.8,
+            footnote=repeat_note,
         )
-        # From about the second "underscore" said, through the next
-        # caption.
-        repeat_note = "^ Repeat map still active"
-        self.show_footnote(repeat_note, "underscore", nth=2)
         self.press("_", self.sim.switch_through, expect="CABDE", fast=True,
                    pace=0.8)
         self.press("_", self.sim.switch_through, expect="DABCE", fast=True,
@@ -1467,11 +1482,7 @@ class SmartBuryIntro(Scene):
         )
         self.press("_", self.sim.switch_through, expect="CABDE", fast=True,
                    pace=0.95)
-        self.work(
-            "Some typing ends the sequence.",
-            expect="CABDE",
-            pace=0.8,
-        )
+        self.work(expect="CABDE", pace=0.8)
         self.press(
             "C-x _",
             self.sim.switch_through,
@@ -1527,14 +1538,10 @@ class SmartBuryIntro(Scene):
             '…and `M--` buries "B", going on to "C", not back to "A".',
             expect="CADEB",
         )
-        self.say(
-            '(Consider "B" is no longer required.)',
-            wait=2.5,
-        )
         self.press(
             "_",
             self.sim.switch_through,
-            '`_` goes on to "D", considering "C" may be needed soon.',
+            'One more `_` goes on to "D", considering "C" may be needed soon.',
             expect="DACEB",
         )
 
@@ -1568,23 +1575,9 @@ class SmartBuryIntro(Scene):
         note = rich_text(text, font_size=20, color=DIM_COLOR)
         return note.move_to(UP * FOOTNOTE_Y)
 
-    def show_footnote(self, text: str, phrase: str | None = None,
-                      nth: int = 1) -> None:
-        """Show TEXT as the current caption's footnote, from when its
-        narration reaches the NTH PHRASE, if given (see `cue').  Like one
-        given to `say', it stays while the next captions give it again.
-        """
-        if phrase is not None:
-            self.cue(phrase, nth)
-        note = self.footnote_text_mobject(text)
-        old = [self.footnote] if self.footnote is not None else []
-        self.play(*(FadeOut(m) for m in old), FadeIn(note, shift=UP * 0.15),
-                  run_time=0.4)
-        self.footnote, self.footnote_text = note, text
-
-    def cue(self, phrase: str, nth: int = 1) -> None:
+    def cue(self, phrase: str, nth: int = 1, lead: float = 0.0) -> None:
         """Wait until the current caption's narration reaches its NTH
-        PHRASE.
+        PHRASE, or LEAD seconds before.
 
         Estimated from where PHRASE is in the words said, as a share of
         the speech's length; without narration, of a reading speed of 15
@@ -1597,7 +1590,7 @@ class SmartBuryIntro(Scene):
         share = index / len(words)
         length = (self.caption_speech if self.caption_speech is not None
                   else len(words) / 15)
-        remaining = self.caption_start + share * length - self.time
+        remaining = self.caption_start + share * length - lead - self.time
         if remaining > 0:
             self.wait(remaining)
 
@@ -1667,8 +1660,8 @@ class SmartBuryIntro(Scene):
         )
         self.say("That’s Smart Bury.", wait=0)
         self.play(FadeIn(title, shift=UP * 0.2), FadeIn(tagline))
-        self.say("To try it, enable {smart-bury-mode} and {repeat-mode} in "
-                 "your init file.", wait=0)
+        self.say("To try it, enable {smart-bury-mode} and {repeat-mode} in Emacs.",
+                 wait=0)
         self.play(
             FadeIn(setup_box), FadeIn(setup, shift=UP * 0.15), FadeIn(link)
         )
