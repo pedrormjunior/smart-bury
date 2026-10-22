@@ -763,7 +763,8 @@ class SmartBuryIntro(Scene):
         self.add(halo)
         return halo
 
-    def glow_off(self, keys: list[VGroup], halos: list[VGroup]) -> None:
+    def glow_off(self, keys: list[VGroup], halos: list[VGroup],
+                 run_time: float = 0.3) -> None:
         """Fade the glow of KEYS out: halos vanish, outlines turn back."""
         for halo in halos:
             halo.clear_updaters()
@@ -773,7 +774,7 @@ class SmartBuryIntro(Scene):
                 key[0][0].animate.set_stroke(KEY_STROKE, width=1.5)
                 for key in keys
             ),
-            run_time=0.3,
+            run_time=run_time,
         )
         self.remove(*halos)
 
@@ -799,16 +800,19 @@ class SmartBuryIntro(Scene):
         caption: str = "",
         expect: str | None = None,
         fast: bool = False,
+        pace: float = 1.0,
     ) -> None:
         """Press KEYS, run the model's ACTION, and animate the result.
 
         KEYS are appended to the keys panel, unless they start with C-x
         or the previous command did not arm the repeat map, in which case
         they start a new key sequence there.  EXPECT, if given, is the
-        buffer order the storyboard expects.
+        buffer order the storyboard expects.  PACE scales every duration
+        but the caption's fade, e.g. to end a part about when its
+        narration does.
         """
         if caption:
-            self.say(caption, wait=0.25 if fast else 0.5)
+            self.say(caption, wait=(0.25 if fast else 0.5) * pace)
         animations = []
         if (
             keys.startswith("C-x")
@@ -838,7 +842,7 @@ class SmartBuryIntro(Scene):
                         n_wiggles=4,
                     )
                 )
-        self.play(*animations, run_time=0.25 if fast else 0.4)
+        self.play(*animations, run_time=(0.25 if fast else 0.4) * pace)
         old = list(self.sim.blist)
         action()
         if expect is not None:
@@ -846,13 +850,13 @@ class SmartBuryIntro(Scene):
         self.update_stage(
             old,
             self.repeat_message(self.sim.report),
-            run_time=0.55 if fast else 1.0,
+            run_time=(0.55 if fast else 1.0) * pace,
             extra=wiggles,
         )
         if repeating:
-            self.glow_off(glowing, halos)
+            self.glow_off(glowing, halos, run_time=0.3 * pace)
             self.remove(glowing[0])  # the minibuffer's overlay
-        wait = 0.35 if fast else max(1.0, 0.15 * len(caption.split()))
+        wait = (0.35 if fast else max(1.0, 0.15 * len(caption.split()))) * pace
         suffix = keys.split()[-1]
         if keys.startswith("C-x ") and suffix in REPEAT_KEYS:
             # repeat-mode's message has just appeared: highlight the key
@@ -867,17 +871,19 @@ class SmartBuryIntro(Scene):
                     rotation_angle=0.03 * TAU,
                     n_wiggles=4,
                 ),
-                run_time=0.9,
+                run_time=0.9 * pace,
             )
-            self.glow_off([overlay], [halo])
+            self.glow_off([overlay], [halo], run_time=0.3 * pace)
             self.remove(overlay)
-            wait = max(0.0, wait - 1.2)
+            wait = max(0.0, wait - 1.2 * pace)
         if wait > 0:
             self.wait(wait)
 
-    def work(self, caption: str, expect: str | None = None) -> None:
+    def work(self, caption: str, expect: str | None = None,
+             pace: float = 1.0) -> None:
         """Any other command (e.g. typing), which ends the sequence and
-        clears `repeat-mode's message."""
+        clears `repeat-mode's message.  PACE scales every duration but the
+        caption's fade (see `press')."""
         self.say(caption, wait=0)
         self.sim.work()
         if expect is not None:
@@ -894,7 +900,7 @@ class SmartBuryIntro(Scene):
         ]
         if self.state_visible:
             animations.append(self.initial_marker.animate.set_opacity(0))
-        self.play(*animations, run_time=0.6)
+        self.play(*animations, run_time=0.6 * pace)
         frame = VGroup(
             self.frame_outline,
             self.mode_line,
@@ -904,13 +910,14 @@ class SmartBuryIntro(Scene):
             typing,
         )
         self.play(
-            frame.animate(rate_func=there_and_back).scale(1.04), run_time=0.7
+            frame.animate(rate_func=there_and_back).scale(1.04),
+            run_time=0.7 * pace,
         )
-        self.wait(0.4)
+        self.wait(0.4 * pace)
         self.play(
             FadeOut(typing),
             line.animate.set_stroke(opacity=LINE_OPACITY),
-            run_time=0.4,
+            run_time=0.4 * pace,
         )
 
     def switch_to_buffer(
@@ -1235,7 +1242,7 @@ class SmartBuryIntro(Scene):
         )
         self.play(FadeOut(minibuffer_hint))
 
-        self.say("(Keys pressed appear on the right.)", wait=0)
+        self.say("(Key presses appear on the right.)", wait=0)
         self.play(FadeIn(self.keys_panel))
         self.wait(1)
 
@@ -1290,15 +1297,11 @@ class SmartBuryIntro(Scene):
             "Each further `M--` does the same…",
             expect="CDEAB",
             fast=True,
+            pace=0.35,
         )
-        self.press("M--", self.sim.bury, expect="DEABC", fast=True)
-        self.press("M--", self.sim.bury, expect="EABCD", fast=True)
-        self.press(
-            "M--",
-            self.sim.bury,
-            '(Let’s get back to "A" by burying "E"…)',
-            expect="ABCDE",
-        )
+        for order in ("DEABC", "EABCD", "ABCDE"):
+            self.press("M--", self.sim.bury, expect=order, fast=True,
+                       pace=0.35)
 
     def switching_through(self) -> None:
         self.counter_text.become(self.counter_label(self.sim.counter))
@@ -1354,13 +1357,12 @@ class SmartBuryIntro(Scene):
             "…and `M-_` switches back, as many times as wanted.",
             expect="ABCDE",
         )
-        self.press("M-_", self.sim.switch_to_other, expect="BACDE", fast=True)
-        self.press(
-            "M-_",
-            self.sim.switch_to_other,
-            "The ~current~ and the ~other buffer~ just trade places.",
-            expect="ABCDE",
-        )
+        # A and B trade places twice more, extra fast: about 1.5 s of
+        # silence after the narration (paces here and below are tuned on
+        # the narration's lengths; see `make intro-narration').
+        for order in ("BACDE", "ABCDE", "BACDE", "ABCDE"):
+            self.press("M-_", self.sim.switch_to_other, expect=order,
+                       fast=True, pace=0.3)
 
     def breaking_the_sequence(self) -> None:
         # repeat-mode is still active from the previous part, so a plain
@@ -1371,14 +1373,18 @@ class SmartBuryIntro(Scene):
             'Aiming at "D", `_` `_` `_` goes there.',
             expect="BACDE",
             fast=True,
+            pace=0.87,
         )
-        self.press("_", self.sim.switch_through, expect="CABDE", fast=True)
-        self.press("_", self.sim.switch_through, expect="DABCE")
+        self.press("_", self.sim.switch_through, expect="CABDE", fast=True,
+                   pace=0.87)
+        self.press("_", self.sim.switch_through, expect="DABCE", fast=True,
+                   pace=0.87)
         self.press(
             "M-_",
             self.sim.switch_to_other,
             '`M-_` goes back to "A".',
             expect="ABCDE",
+            pace=0.65,
         )
         self.press(
             "_",
@@ -1386,11 +1392,14 @@ class SmartBuryIntro(Scene):
             'Aiming at "C", `_` `_` goes there.',
             expect="BACDE",
             fast=True,
+            pace=0.95,
         )
-        self.press("_", self.sim.switch_through, expect="CABDE")
+        self.press("_", self.sim.switch_through, expect="CABDE", fast=True,
+                   pace=0.95)
         self.work(
             "Some typing ends the sequence.",
             expect="CABDE",
+            pace=0.8,
         )
         self.press(
             "C-x _",
@@ -1398,17 +1407,20 @@ class SmartBuryIntro(Scene):
             'Aiming at "B", `C-x _` `_` goes there.',
             expect="ACBDE",
             fast=True,
+            pace=0.8,
         )
-        self.press("_", self.sim.switch_through, expect="BCADE")
-        self.work("Some typing there ends the sequence.", expect="BCADE")
+        self.press("_", self.sim.switch_through, expect="BCADE", pace=0.8)
+        self.work("Some typing there ends the sequence.", expect="BCADE",
+                  pace=0.85)
         self.press(
             "C-x _",
             self.sim.switch_through,
             'To be back on "A", `C-x _` `_` again.',
             expect="CBADE",
             fast=True,
+            pace=0.78,
         )
-        self.press("_", self.sim.switch_through, expect="ABCDE")
+        self.press("_", self.sim.switch_through, expect="ABCDE", pace=0.78)
         self.say(
             "(This way we easily cycle among 3 buffers.)",
             wait=2.5,
