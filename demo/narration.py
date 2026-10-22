@@ -45,7 +45,10 @@ SAMPLE_CAPTIONS = [
 
 MODIFIERS = {"C": "control", "M": "meta", "S": "shift"}
 KEY_NAMES = {"_": "underscore", "-": "minus", "RET": "return",
-             "TAB": "tab", "SPC": "space"}
+             "TAB": "tab", "SPC": "space",
+             **{str(digit): word for digit, word in enumerate(
+                 ["zero", "one", "two", "three", "four", "five", "six",
+                  "seven", "eight", "nine"])}}
 
 
 def spoken_key(key: str) -> str:
@@ -58,16 +61,30 @@ def spoken_key(key: str) -> str:
     return " ".join(words)
 
 
+def spoken_keys(keys: list[str]) -> str:
+    """How to say the key sequence KEYS: commas between keys, but "plus"
+    before a digit, e.g. ["C-x", "3"] -> "control x plus three"."""
+    words = spoken_key(keys[0])
+    for key in keys[1:]:
+        words += (" plus " if key.isdigit() else ", ") + spoken_key(key)
+    return words
+
+
 def spoken(text: str) -> str:
     """The words to say for caption TEXT, in the intro's markup.
 
-    Keys (`C-x M--`) are named, a comma between the keys of a sequence;
+    Keys are named, in double quotes, which make Kokoro say them as a
+    unit, a comma between the keys of a sequence, adjacent key spans
+    making one sequence (`C-x _` `_` -> "control x, underscore,
+    underscore");
     symbols ({smart-bury-mode}, |quit-window|) lose their hyphens; italics (~other
     buffer~) are plain; footnote markers (^) go.  Buffer names stay in their double quotes ("A"),
     which make Kokoro say the letter rather than the article "a".
     """
-    text = re.sub(r"`([^`]*)`",
-                  lambda m: ", ".join(map(spoken_key, m.group(1).split())),
+    # A footnote marker (^) right after a key doesn't break a sequence.
+    text = re.sub(r"`[^`]*`\^?(?:\s+`[^`]*`\^?)*",
+                  lambda m: '"' + spoken_keys(re.sub(
+                      r"[`^]", " ", m.group(0)).split()) + '"',
                   text)
     text = re.sub(r"\{([^}]*)\}|\|([^|]*)\|",
                   lambda m: (m.group(1) or m.group(2)).replace("-", " "),
