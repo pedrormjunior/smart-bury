@@ -344,12 +344,19 @@ class SmartBuryIntro(Scene):
             ("Splitting the window", self.splitting_the_window),
             ("Outro", self.outro),
         ]
-        # To render only the start, e.g. SMART_BURY_UNTIL=Stage stops
-        # before that section, once the last speech has ended.
+        # To render only part of the video: SMART_BURY_UNTIL=Stage stops
+        # before that section, once the last speech has ended, and
+        # SMART_BURY_FROM=Outro skips the sections before that one (only
+        # for those not depending on earlier ones: the title, the cards,
+        # and the outro).
         until = os.environ.get("SMART_BURY_UNTIL")
         for name, part in sections:
             if name == until:
+        start = os.environ.get("SMART_BURY_FROM")
                 self.finish_speech()
+            if start is not None and name != start:
+                continue
+            start = None
                 self.narration_end = self.time
                 self.end_subtitle()
                 break
@@ -1070,7 +1077,8 @@ class SmartBuryIntro(Scene):
     # Cards
 
     def clear_all(self) -> None:
-        self.play(*(FadeOut(mobject) for mobject in self.mobjects))
+        if self.mobjects:
+            self.play(*(FadeOut(mobject) for mobject in self.mobjects))
         self.caption = None
         self.footnote = None
         self.footnote_text = None
