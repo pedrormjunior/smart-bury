@@ -588,9 +588,13 @@ class SmartBuryIntro(Scene):
         self.finish_speech()
         self.end_subtitle()
         self.subtitle = (subtitle_text(text), self.time)
+        # For `cue': what is said, from when, and for how long.
+        self.caption_words = spoken(text) if speech is None else speech
+        self.caption_start = self.time
+        self.caption_speech = None
         if self.narrator is not None:
-            path, duration = self.narrator.clip(
-                spoken(text) if speech is None else speech)
+            path, duration = self.narrator.clip(self.caption_words)
+            self.caption_speech = duration
             # Not `add_sound': it drops the sound when the previous
             # animation came from Manim's cache, whose skipping state
             # lasts until the next animation starts.
@@ -1226,11 +1230,6 @@ class SmartBuryIntro(Scene):
         self.play(Create(self.other_frame), FadeIn(self.other_label))
         self.wait(1.2)
 
-        self.say(
-            "(The window shows the ~current buffer~; "
-            "the ~minibuffer~ sits below it.)",
-            wait=0,
-        )
         minibuffer_hint = self.at_minibuffer(
             Text("minibuffer", font_size=20, color=DIM_COLOR)
         )
@@ -1249,7 +1248,6 @@ class SmartBuryIntro(Scene):
         )
         self.play(FadeOut(minibuffer_hint))
 
-        self.say("(Key presses appear on the right.)", wait=0)
         self.play(FadeIn(self.keys_panel))
         self.wait(1)
 
@@ -1317,13 +1315,17 @@ class SmartBuryIntro(Scene):
             "and how deep it is.",
             wait=0,
         )
+        # The "initial" marker as the caption starts, the counter (with
+        # the state panel) when its narration gets to "how deep it is".
         self.state_visible = True
         self.play(
-            FadeIn(self.state_panel),
             self.initial_marker_target(visible=True),
             *self.keys_clear(),
+            run_time=0.6,
         )
-        self.wait(1.3)
+        self.cue("how deep")
+        self.play(FadeIn(self.state_panel), run_time=0.6)
+        self.wait(0.7)
         self.press(
             "C-x _",
             self.sim.switch_through,
@@ -1392,9 +1394,9 @@ class SmartBuryIntro(Scene):
         self.press(
             "M-_",
             self.sim.switch_to_other,
-            '`M-_` goes back to "A".',
+            "`M-_` goes back to the ~initial buffer~.",
             expect="ABCDE",
-            pace=0.65,
+            pace=0.8,
         )
         self.press(
             "_",
@@ -1460,7 +1462,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "M-_",
             self.sim.switch_to_other,
-            '`M-_` goes back to "A".',
+            "`M-_` goes back to the ~initial buffer~.",
             expect="ACDEB",
         )
 
@@ -1485,6 +1487,21 @@ class SmartBuryIntro(Scene):
             '…and `_` again goes on to "D".',
             expect="DACEB",
         )
+
+    def cue(self, phrase: str) -> None:
+        """Wait until the current caption's narration reaches PHRASE.
+
+        Estimated from where PHRASE is in the words said, as a share of
+        the speech's length; without narration, of a reading speed of 15
+        characters per second.
+        """
+        words = self.caption_words
+        share = words.index(phrase) / len(words)
+        length = (self.caption_speech if self.caption_speech is not None
+                  else len(words) / 15)
+        remaining = self.caption_start + share * length - self.time
+        if remaining > 0:
+            self.wait(remaining)
 
     def finish_speech(self) -> None:
         """Wait until the last caption's speech has ended, if any."""
