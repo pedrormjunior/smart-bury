@@ -11,9 +11,9 @@ Every buffer order shown comes from the model in smart_bury_sim.py, and
 each storyboard step asserts the order it expects (see `expect'), so
 `make intro-check' validates the storyboard without rendering.
 
-Render with `make intro-preview' (fast) or `make intro' (final) from the
-repository root.  The longer, case-by-case animation is
-smart_bury_demo.py; this file reuses a few of its pieces unchanged.
+Render with `make intro' from the repository root (see the Makefile for
+its quality and narration voice).  The longer, case-by-case animation is
+smart_bury_demo.py.
 """
 
 from __future__ import annotations
@@ -57,10 +57,12 @@ from manim import (
 )
 
 from narration import Narrator, spoken
-from smart_bury_demo import MONO
 from smart_bury_sim import REPEATABLE_COMMANDS, SMART_COMMANDS, SmartBury
 
-Text.set_default(font="Sans", color="#ebdbb2")
+# LaTeX's look: Latin Modern, for text and monospace alike.
+SERIF = "Latin Modern Roman"
+MONO = "Latin Modern Mono"
+Text.set_default(font=SERIF, color="#ebdbb2")
 
 BUFFERS = ["A", "B", "C", "D", "E"]
 # Rainbow colors, so the list's order is easy to follow (the long demo
@@ -219,7 +221,7 @@ def glyph_count(text: str) -> int:
 
 
 def rich_text(
-    text: str, font_size: float = 26, color=None, font: str = "Sans"
+    text: str, font_size: float = 26, color=None, font: str = SERIF
 ) -> VGroup:
     """Render TEXT (see `parse_rich') as one line: VGroup(boxes, glyphs).
 
@@ -350,13 +352,13 @@ class SmartBuryIntro(Scene):
         # for those not depending on earlier ones: the title, the cards,
         # and the outro).
         until = os.environ.get("SMART_BURY_UNTIL")
-        for name, part in sections:
-            if name == until:
         start = os.environ.get("SMART_BURY_FROM")
-                self.finish_speech()
+        for name, part in sections:
             if start is not None and name != start:
                 continue
             start = None
+            if name == until:
+                self.finish_speech()
                 self.narration_end = self.time
                 self.end_subtitle()
                 break
