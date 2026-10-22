@@ -612,8 +612,8 @@ class SmartBuryIntro(Scene):
         else:
             old.append(self.footnote)
             if footnote is not None:
-                note = rich_text(footnote, font_size=20, color=DIM_COLOR)
-                shown.append(note.move_to(UP * FOOTNOTE_Y))
+                note = self.footnote_text_mobject(footnote)
+                shown.append(note)
         old = [m for m in old if m is not None]
         self.play(
             *(FadeOut(m) for m in old),
@@ -805,6 +805,7 @@ class SmartBuryIntro(Scene):
         expect: str | None = None,
         fast: bool = False,
         pace: float = 1.0,
+        footnote: str | None = None,
     ) -> None:
         """Press KEYS, run the model's ACTION, and animate the result.
 
@@ -813,10 +814,11 @@ class SmartBuryIntro(Scene):
         they start a new key sequence there.  EXPECT, if given, is the
         buffer order the storyboard expects.  PACE scales every duration
         but the caption's fade, e.g. to end a part about when its
-        narration does.
+        narration does.  FOOTNOTE goes with the caption (see `say').
         """
         if caption:
-            self.say(caption, wait=(0.25 if fast else 0.5) * pace)
+            self.say(caption, wait=(0.25 if fast else 0.5) * pace,
+                     footnote=footnote)
         animations = []
         if (
             keys.startswith("C-x")
@@ -1382,21 +1384,26 @@ class SmartBuryIntro(Scene):
         self.press(
             "_",
             self.sim.switch_through,
-            'Aiming at "D", `_` `_` `_` goes there.',
+            'Aiming at "D", `_`^ `_` `_` goes there.',
             expect="BACDE",
             fast=True,
-            pace=0.87,
+            pace=0.8,
         )
+        # From about the second "underscore" said, through the next
+        # caption.
+        repeat_note = "^ Repeat map still active"
+        self.show_footnote(repeat_note, "underscore", nth=2)
         self.press("_", self.sim.switch_through, expect="CABDE", fast=True,
-                   pace=0.87)
+                   pace=0.8)
         self.press("_", self.sim.switch_through, expect="DABCE", fast=True,
-                   pace=0.87)
+                   pace=0.8)
         self.press(
             "M-_",
             self.sim.switch_to_other,
             "`M-_` goes back to the ~initial buffer~.",
             expect="ABCDE",
             pace=0.8,
+            footnote=repeat_note,
         )
         self.press(
             "_",
@@ -1432,12 +1439,22 @@ class SmartBuryIntro(Scene):
             pace=0.78,
         )
         self.press("_", self.sim.switch_through, expect="ABCDE", pace=0.78)
-        # Typing in A (the burying part's start) follows soon, under this
-        # caption, so its narration ends about when the typing starts.
+        # Under this caption, the cycle again, faster, typing included;
+        # the burying part's typing in A ends it.  It starts with typing
+        # too: C-x _ right after the last _ would continue that sequence.
         self.say(
             "(This way we easily cycle among 3 buffers.)",
             wait=0.5,
         )
+        self.work(expect="ABCDE", pace=0.6)
+        for first, second in (("BACDE", "CABDE"), ("ACBDE", "BCADE"),
+                              ("CBADE", "ABCDE")):
+            self.press("C-x _", self.sim.switch_through, expect=first,
+                       fast=True, pace=0.6)
+            self.press("_", self.sim.switch_through, expect=second,
+                       fast=True, pace=0.6)
+            if second != "ABCDE":
+                self.work(expect=second, pace=0.6)
 
     def why_smart(self) -> None:
         """The "smart" in Smart Bury: a buffer buried right after reaching
@@ -1488,15 +1505,38 @@ class SmartBuryIntro(Scene):
             expect="DACEB",
         )
 
-    def cue(self, phrase: str) -> None:
-        """Wait until the current caption's narration reaches PHRASE.
+    def footnote_text_mobject(self, text: str) -> VGroup:
+        """TEXT (see `parse_rich') as a footnote, below the caption."""
+        note = rich_text(text, font_size=20, color=DIM_COLOR)
+        return note.move_to(UP * FOOTNOTE_Y)
+
+    def show_footnote(self, text: str, phrase: str | None = None,
+                      nth: int = 1) -> None:
+        """Show TEXT as the current caption's footnote, from when its
+        narration reaches the NTH PHRASE, if given (see `cue').  Like one
+        given to `say', it stays while the next captions give it again.
+        """
+        if phrase is not None:
+            self.cue(phrase, nth)
+        note = self.footnote_text_mobject(text)
+        old = [self.footnote] if self.footnote is not None else []
+        self.play(*(FadeOut(m) for m in old), FadeIn(note, shift=UP * 0.15),
+                  run_time=0.4)
+        self.footnote, self.footnote_text = note, text
+
+    def cue(self, phrase: str, nth: int = 1) -> None:
+        """Wait until the current caption's narration reaches its NTH
+        PHRASE.
 
         Estimated from where PHRASE is in the words said, as a share of
         the speech's length; without narration, of a reading speed of 15
         characters per second.
         """
         words = self.caption_words
-        share = words.index(phrase) / len(words)
+        index = -1
+        for _ in range(nth):
+            index = words.index(phrase, index + 1)
+        share = index / len(words)
         length = (self.caption_speech if self.caption_speech is not None
                   else len(words) / 15)
         remaining = self.caption_start + share * length - self.time
