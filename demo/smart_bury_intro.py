@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import random
+import re
 from xml.sax.saxutils import escape
 
 from manim import (
@@ -116,6 +117,7 @@ KEYS_BOX_WIDTH = 3.4
 SIDE_X = 7.11 - MARGIN - KEYS_BOX_WIDTH / 2
 KEYS_Y = 0.2
 CAPTION_Y = -3.3
+FOOTNOTE_Y = CAPTION_Y - 0.5    # a caption's footnote, right below it
 KEYS_FONT_SIZE = 26
 MINIBUFFER_FONT_SIZE = 20  # fits Smart Bury's message and repeat-mode's hint
 KEYS_GAP = 0.12
@@ -144,9 +146,11 @@ def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
 
     `KEYS` is a key (or key sequence) drawn in a monospace key box,
     ~TEXT~ is italic, and {SYMBOL} is a monospace symbol in the
-    highlight color.  A buffer's name standing alone (e.g. "back to
-    A.") is in the buffer's color, as its box in the list.  The key
-    spans are (start, end) offsets into the plain text.
+    highlight color, and ^ a footnote marker, an asterisk in the
+    highlight color.  "NAME" is a buffer's name, shown without the
+    quotes in the buffer's color, as its box in the list (narration keeps
+    the quotes; see `spoken').  The key spans are (start, end) offsets
+    into the plain text.
     """
     plain, markup, keys = "", "", []
     italic = False
@@ -176,19 +180,29 @@ def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
             markup += "</i>" if italic else "<i>"
             italic = not italic
             i += 1
-        elif (char in COLORS
-              and not (i > 0 and (text[i - 1].isalnum()
-                                  or text[i - 1] in "-_"))
-              and not (i + 1 < len(text) and (text[i + 1].isalnum()
-                                              or text[i + 1] in "-_"))):
-            plain += char
-            markup += f'<span foreground="{COLORS[char]}">{char}</span>'
+        elif char == "^":
+            plain += "*"
+            markup += f'<span foreground="{HIGHLIGHT}">*</span>'
             i += 1
+        elif char == '"':
+            end = text.index('"', i + 1)
+            name = text[i + 1 : end]
+            plain += name
+            markup += (f'<span foreground="{COLORS[name]}">'
+                       f"{escape(name)}</span>")
+            i = end + 1
         else:
             plain += char
             markup += escape(char)
             i += 1
     return plain, markup, keys
+
+
+def subtitle_text(text: str) -> str:
+    """TEXT (see `parse_rich') as a subtitle: its markup removed, footnote
+    markers included, except the quotes around buffer names ("A"), kept
+    as in the narration."""
+    return re.sub(r"[`{}~^]", "", text)
 
 
 def glyph_count(text: str) -> int:
@@ -294,6 +308,8 @@ class SmartBuryIntro(Scene):
         self.sim = SmartBury(BUFFERS)
         self.key_boxes: list[VGroup] = []
         self.caption: VGroup | None = None
+        self.footnote: VGroup | None = None
+        self.footnote_text: str | None = None
         self.state_visible = False
         # Narration, only with a voice in SMART_BURY_VOICE (see
         # narration.py): each caption is spoken from when it appears.
@@ -555,9 +571,14 @@ class SmartBuryIntro(Scene):
             f"counter: {counter}", font=MONO, font_size=24, color=INITIAL_COLOR
         ).move_to(RIGHT * SIDE_X + UP * (KEYS_Y - 1.75))
 
-    def say(self, text: str, wait: float = 1.5,
-            speech: str | None = None) -> None:
+    def say(self, text: str, wait: float = 1.5, speech: str | None = None,
+            footnote: str | None = None) -> None:
         """Replace the caption at the bottom (see `parse_rich' for TEXT).
+
+        FOOTNOTE, if any, is shown below the caption while it lasts, in
+        smaller, dimmer text; it is neither spoken nor a subtitle.  Mark
+        what it refers to with ^ in both.  A footnote given again with
+        the next caption stays in place.
 
         With narration, the caption waits for the previous one's speech
         to end, then is spoken as it appears: SPEECH, or TEXT's words
@@ -566,7 +587,7 @@ class SmartBuryIntro(Scene):
         """
         self.finish_speech()
         self.end_subtitle()
-        self.subtitle = (parse_rich(text)[0], self.time)
+        self.subtitle = (subtitle_text(text), self.time)
         if self.narrator is not None:
             path, duration = self.narrator.clip(
                 spoken(text) if speech is None else speech)
@@ -581,15 +602,22 @@ class SmartBuryIntro(Scene):
         if new.width > 13:
             new.scale_to_fit_width(13)
         new.move_to(UP * CAPTION_Y)
-        if self.caption is None:
-            self.play(FadeIn(new, shift=UP * 0.15), run_time=0.5)
+        shown, old, note = [new], [self.caption], None
+        if footnote is not None and footnote == self.footnote_text:
+            note = self.footnote                # stays in place
         else:
-            self.play(
-                FadeOut(self.caption),
-                FadeIn(new, shift=UP * 0.15),
-                run_time=0.5,
-            )
-        self.caption = new
+            old.append(self.footnote)
+            if footnote is not None:
+                note = rich_text(footnote, font_size=20, color=DIM_COLOR)
+                shown.append(note.move_to(UP * FOOTNOTE_Y))
+        old = [m for m in old if m is not None]
+        self.play(
+            *(FadeOut(m) for m in old),
+            *(FadeIn(m, shift=UP * 0.15) for m in shown),
+            run_time=0.5,
+        )
+        self.caption, self.footnote = new, note
+        self.footnote_text = footnote
         if wait > 0:
             self.wait(wait)
 
@@ -927,14 +955,15 @@ class SmartBuryIntro(Scene):
         )
         self.wait(0.35 if fast else 1.0)
 
-    def split_window_right(self, caption: str, expect: str) -> None:
+    def split_window_right(self, caption: str, expect: str,
+                           footnote: str | None = None) -> None:
         """C-x 3: the selected window keeps the frame's left half, and a
         new window on the right shows the current buffer too.
 
         `split-window-right' is in `smart-bury-repeatable-commands', so
         repeat-mode's message shows, as after a Smart Bury command.
         """
-        self.say(caption, wait=0.5)
+        self.say(caption, wait=0.5, footnote=footnote)
         self.play(*self.keys_clear(), *self.keys_push("C-x 3"), run_time=0.4)
         self.sim.split_window()
         self.expect(expect, "C-x 3")
@@ -1009,6 +1038,8 @@ class SmartBuryIntro(Scene):
     def clear_all(self) -> None:
         self.play(*(FadeOut(mobject) for mobject in self.mobjects))
         self.caption = None
+        self.footnote = None
+        self.footnote_text = None
         self.key_boxes = []
 
     def title_card(self) -> None:
@@ -1215,15 +1246,15 @@ class SmartBuryIntro(Scene):
         )
         self.switch_to_buffer(
             "C",
-            "`C-x b` and typing C.",
+            '`C-x b` and typing "C".',
             expect="CABDE",
         )
         self.switch_to_buffer(
             "A",
-            "Then `C-x b` `RET` is enough to come back to A, the ~other buffer~.",
+            'Then `C-x b` `RET` is enough to come back to "A", the ~other buffer~.',
             expect="ACBDE",
         )
-        self.say("Notice it leaves C ahead of B.", wait=0)
+        self.say('Notice it leaves "C" ahead of "B".', wait=0)
         self.play(
             Indicate(self.boxes["C"], color=WHITE),
             Indicate(self.boxes["B"], color=WHITE),
@@ -1246,7 +1277,7 @@ class SmartBuryIntro(Scene):
         # Burying right away would continue the switching sequence (smart
         # burying goes on from its depth); working first makes the buries
         # a fresh sequence that cycles through every buffer.
-        self.work("(Any typing in A ends the sequence.)", expect="ABCDE")
+        self.work('(Any typing in "A" ends the sequence.)', expect="ABCDE")
         self.press(
             "C-x M--",
             self.sim.bury,
@@ -1265,7 +1296,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "M--",
             self.sim.bury,
-            "(Let’s get back to A by burying…)",
+            '(Let’s get back to "A" by burying "E"…)',
             expect="ABCDE",
         )
 
@@ -1286,7 +1317,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "C-x _",
             self.sim.switch_through,
-            "`C-x _` goes to the ~other buffer~, B.",
+            '`C-x _` goes to the ~other buffer~, "B".',
             expect="BACDE",
         )
         self.press(
@@ -1299,13 +1330,13 @@ class SmartBuryIntro(Scene):
         self.press(
             "_",
             self.sim.switch_through,
-            "Once in E, A B C D stay in order.",
+            'Once in "E", "A" "B" "C" "D" stay in order.',
             expect="EABCD",
         )
         self.press(
             "_",
             self.sim.switch_through,
-            "One more `_` wraps around to A.",
+            'One more `_` wraps around to "A".',
             expect="ABCDE",
             fast=True,
         )
@@ -1314,7 +1345,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "C-x M-_",
             self.sim.switch_to_other,
-            "`C-x M-_` also switches to the ~other buffer~, B…",
+            '`C-x M-_` also switches to the ~other buffer~, "B"…',
             expect="BACDE",
         )
         self.press(
@@ -1337,7 +1368,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "_",
             self.sim.switch_through,
-            "Aiming at D, `_` `_` `_` goes there.",
+            'Aiming at "D", `_` `_` `_` goes there.',
             expect="BACDE",
             fast=True,
         )
@@ -1346,13 +1377,13 @@ class SmartBuryIntro(Scene):
         self.press(
             "M-_",
             self.sim.switch_to_other,
-            "`M-_` goes back to A.",
+            '`M-_` goes back to "A".',
             expect="ABCDE",
         )
         self.press(
             "_",
             self.sim.switch_through,
-            "Aiming at C, `_` `_` goes there.",
+            'Aiming at "C", `_` `_` goes there.',
             expect="BACDE",
             fast=True,
         )
@@ -1364,7 +1395,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "C-x _",
             self.sim.switch_through,
-            "Aiming at B, `C-x _` `_` goes there.",
+            'Aiming at "B", `C-x _` `_` goes there.',
             expect="ACBDE",
             fast=True,
         )
@@ -1373,7 +1404,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "C-x _",
             self.sim.switch_through,
-            "To be back on A, `C-x _` `_` again.",
+            'To be back on "A", `C-x _` `_` again.',
             expect="CBADE",
             fast=True,
         )
@@ -1390,23 +1421,23 @@ class SmartBuryIntro(Scene):
         self.press(
             "_",
             self.sim.switch_through,
-            "Aiming at C again, `_` goes to B…",
+            'Aiming at "C" again, `_` goes to "B"…',
             expect="BACDE",
         )
         self.press(
             "M--",
             self.sim.bury,
-            "…and `M--` buries B, going on to C, not back to A.",
+            '…and `M--` buries "B", going on to "C", not back to "A".',
             expect="CADEB",
         )
         self.say(
-            "(B was simply on the way to C.)",
+            '("B" was simply on the way to "C".)',
             wait=2.5,
         )
         self.press(
             "M-_",
             self.sim.switch_to_other,
-            "`M-_` goes back to A.",
+            '`M-_` goes back to "A".',
             expect="ACDEB",
         )
 
@@ -1414,25 +1445,28 @@ class SmartBuryIntro(Scene):
         """C-x 3 arms the repeat map, so `_' right away fills the selected
         window with another buffer; the initial buffer, still shown in the
         right window, keeps its place in the sequence."""
+        # The footnote stays from C-x 3's caption through the next one.
+        footnote = "^ See {smart-bury-repeatable-commands}"
         self.split_window_right(
-            "`C-x 3` splits the window…",
+            "`C-x 3`^ splits the window…",
             expect="ACDEB",
+            footnote=footnote,
         )
         self.say(
-            "…and, listed in {smart-bury-repeatable-commands}, it arms the "
-            "repeat map.",
+            "…and it arms the repeat map.",
             wait=2.2,
+            footnote=footnote,
         )
         self.press(
             "_",
             self.sim.switch_through,
-            "So `_` right away shows C…",
+            'So `_` right away shows "C"…',
             expect="CADEB",
         )
         self.press(
             "_",
             self.sim.switch_through,
-            "…and `_` again goes on to D.",
+            '…and `_` again goes on to "D".',
             expect="DACEB",
         )
 

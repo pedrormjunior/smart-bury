@@ -38,7 +38,7 @@ CANDIDATE_VOICES = ["af_heart", "am_michael", "bf_emma", "bm_george"]
 SAMPLE_CAPTIONS = [
     "Emacs keeps a “list of all buffers” (most recently used first).",
     "`C-x M--` buries the ~current buffer~.",
-    "…and `M--` buries B, going on to C, not back to A.",
+    '…and `M--` buries "B", going on to "C", not back to "A".',
     "…and, listed in {smart-bury-repeatable-commands}, it arms the "
     "repeat map.",
 ]
@@ -63,14 +63,15 @@ def spoken(text: str) -> str:
 
     Keys (`C-x M--`) are named, a comma between the keys of a sequence;
     symbols ({smart-bury-mode}) lose their hyphens; italics (~other
-    buffer~) are plain.
+    buffer~) are plain; footnote markers (^) go.  Buffer names stay in their double quotes ("A"),
+    which make Kokoro say the letter rather than the article "a".
     """
     text = re.sub(r"`([^`]*)`",
                   lambda m: ", ".join(map(spoken_key, m.group(1).split())),
                   text)
     text = re.sub(r"\{([^}]*)\}", lambda m: m.group(1).replace("-", " "),
                   text)
-    return text.replace("~", "")
+    return text.replace("~", "").replace("^", "")
 
 
 class Narrator:
