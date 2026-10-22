@@ -59,10 +59,9 @@ from manim import (
 from narration import Narrator, spoken
 from smart_bury_sim import REPEATABLE_COMMANDS, SMART_COMMANDS, SmartBury
 
-# LaTeX's look: Latin Modern, for text and monospace alike.
-SERIF = "Latin Modern Roman"
-MONO = "Latin Modern Mono"
-Text.set_default(font=SERIF, color="#ebdbb2")
+TEXT_FONT = "Sans"
+MONO = "Monospace"
+Text.set_default(font=TEXT_FONT, color="#ebdbb2")
 
 BUFFERS = ["A", "B", "C", "D", "E"]
 # Rainbow colors, so the list's order is easy to follow (the long demo
@@ -221,7 +220,7 @@ def glyph_count(text: str) -> int:
 
 
 def rich_text(
-    text: str, font_size: float = 26, color=None, font: str = SERIF
+    text: str, font_size: float = 26, color=None, font: str = TEXT_FONT
 ) -> VGroup:
     """Render TEXT (see `parse_rich') as one line: VGroup(boxes, glyphs).
 
