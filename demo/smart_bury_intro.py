@@ -145,9 +145,10 @@ def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
     """Parse TEXT's markup into plain text, Pango markup, and key spans.
 
     `KEYS` is a key (or key sequence) drawn in a monospace key box,
-    ~TEXT~ is italic, and {SYMBOL} is a monospace symbol in the
-    highlight color, and ^ a footnote marker, an asterisk in the
-    highlight color.  "NAME" is a buffer's name, shown without the
+    ~TEXT~ is italic, {SYMBOL} is a monospace symbol in the highlight
+    color, |SYMBOL| one in the text's color, and ^ a footnote marker,
+    an asterisk in the highlight color.  "NAME" is a buffer's name,
+    shown without the
     quotes in the buffer's color, as its box in the list (narration keeps
     the quotes; see `spoken').  The key spans are (start, end) offsets
     into the plain text.
@@ -180,6 +181,13 @@ def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
             markup += "</i>" if italic else "<i>"
             italic = not italic
             i += 1
+        elif char == "|":
+            end = text.index("|", i + 1)
+            symbol = text[i + 1 : end]
+            plain += symbol
+            markup += (f'<span font_family="{MONO}">'
+                       f"{escape(symbol)}</span>")
+            i = end + 1
         elif char == "^":
             plain += "*"
             markup += f'<span foreground="{HIGHLIGHT}">*</span>'
@@ -202,7 +210,7 @@ def subtitle_text(text: str) -> str:
     """TEXT (see `parse_rich') as a subtitle: its markup removed, footnote
     markers included, except the quotes around buffer names ("A"), kept
     as in the narration."""
-    return re.sub(r"[`{}~^]", "", text)
+    return re.sub(r"[`{}|~^]", "", text)
 
 
 def glyph_count(text: str) -> int:
@@ -322,30 +330,31 @@ class SmartBuryIntro(Scene):
         # The caption shown and since when, for its subtitle.
         self.subtitle: tuple[str, float] | None = None
 
-        self.next_section("Title")
-        self.title_card()
-        self.next_section("Three basic commands")
-        self.basic_commands_card()
-        self.next_section("Wrapped commands")
-        self.wrapped_commands_card()
-        self.next_section("Stage")
-        self.stage()
-        self.next_section("The vanilla way")
-        self.vanilla_way()
-        self.next_section("Switching through")
-        self.switching_through()
-        self.next_section("Switching to the other buffer")
-        self.switching_to_other()
-        self.next_section("Breaking the sequence")
-        self.breaking_the_sequence()
-        self.next_section("Burying")
-        self.burying()
-        self.next_section("Why smart")
-        self.why_smart()
-        self.next_section("Splitting the window")
-        self.splitting_the_window()
-        self.next_section("Outro")
-        self.outro()
+        sections = [
+            ("Title", self.title_card),
+            ("Three basic commands", self.basic_commands_card),
+            ("Wrapped commands", self.wrapped_commands_card),
+            ("Stage", self.stage),
+            ("The vanilla way", self.vanilla_way),
+            ("Switching through", self.switching_through),
+            ("Switching to the other buffer", self.switching_to_other),
+            ("Breaking the sequence", self.breaking_the_sequence),
+            ("Burying", self.burying),
+            ("Why smart", self.why_smart),
+            ("Splitting the window", self.splitting_the_window),
+            ("Outro", self.outro),
+        ]
+        # To render only the start, e.g. SMART_BURY_UNTIL=Stage stops
+        # before that section, once the last speech has ended.
+        until = os.environ.get("SMART_BURY_UNTIL")
+        for name, part in sections:
+            if name == until:
+                self.finish_speech()
+                self.narration_end = self.time
+                self.end_subtitle()
+                break
+            self.next_section(name)
+            part()
         self.report_narration()
 
     # Building blocks
@@ -1073,9 +1082,11 @@ class SmartBuryIntro(Scene):
         )
         tagline = Text(TAGLINE, font_size=30, color=DIM_COLOR)
         VGroup(title, tagline).arrange(DOWN, buff=0.4)
+        self.say("Smart Bury: switching buffers in Emacs with a few key "
+                 "presses.", wait=0)
         self.play(Write(title), FadeIn(tagline, shift=UP * 0.2))
         self.wait(2)
-        self.clear_all()
+        self.close_card()
 
     def card_heading(self, text: str) -> Text:
         return Text(text, font_size=40, weight="BOLD").move_to(UP * 2.9)
@@ -1091,18 +1102,36 @@ class SmartBuryIntro(Scene):
         return VGroup(keys_group, block).arrange(RIGHT, buff=0.45)
 
     def show_card(
-        self, heading: Text, rows: VGroup, footer: VGroup, hold: float
+        self,
+        heading: Text,
+        rows: VGroup,
+        footer: VGroup,
+        hold: float,
+        captions: tuple[str, ...],
     ) -> None:
-        self.play(FadeIn(heading, shift=DOWN * 0.15))
-        self.play(
-            AnimationGroup(
-                *(FadeIn(row, shift=RIGHT * 0.3) for row in rows),
-                lag_ratio=0.6,
-            ),
-            run_time=2.4,
-        )
-        self.play(FadeIn(footer))
+        """Show a card: HEADING, ROWS, then FOOTER, held HOLD seconds.
+
+        The first of CAPTIONS comes with the heading; the rows and then
+        the footer's lines appear one by one right after the heading;
+        the other captions follow, each as soon as the previous one's
+        speech ends.  The footer is neither said nor captioned.
+        """
+        self.say(captions[0], wait=0)
+        self.play(FadeIn(heading, shift=DOWN * 0.15), run_time=0.6)
+        items = [*(FadeIn(row, shift=RIGHT * 0.3) for row in rows),
+                 *(FadeIn(line, shift=UP * 0.1) for line in footer)]
+        self.play(AnimationGroup(*items, lag_ratio=0.5),
+                  run_time=0.45 * len(items))
+        for caption in captions[1:]:
+            self.say(caption, wait=0)
         self.wait(hold)
+        self.close_card()
+
+    def close_card(self) -> None:
+        """Clear the screen once the last caption's speech has ended,
+        ending its subtitle."""
+        self.finish_speech()
+        self.end_subtitle()
         self.clear_all()
 
     def basic_commands_card(self) -> None:
@@ -1130,7 +1159,8 @@ class SmartBuryIntro(Scene):
         column = max(row[0].width for row in rows)
         for row in rows:
             row[1].next_to(row[0], RIGHT, buff=0.45 + column - row[0].width)
-        rows.arrange(DOWN, aligned_edge=LEFT, buff=0.55).move_to(UP * 0.1)
+        # Up a little, leaving room for the caption below the footer.
+        rows.arrange(DOWN, aligned_edge=LEFT, buff=0.35).move_to(UP * 0.42)
         footer = VGroup(
             rich_text(
                 "{smart-bury-mode} binds these keys.",
@@ -1143,9 +1173,23 @@ class SmartBuryIntro(Scene):
                 font_size=24,
                 color=DIM_COLOR,
             ),
-        ).arrange(DOWN, buff=0.22)
-        footer.move_to(DOWN * 2.75)
-        self.show_card(heading, rows, footer, hold=3.5)
+        ).arrange(DOWN, buff=0.12)
+        # Rows and footer centered between the heading and the caption,
+        # 0.45 apart.
+        footer.move_to(DOWN * 1.94)
+        # The note for the asterisk, aligned with the rows' left edge.
+        footer[1].align_to(rows, LEFT)
+        self.show_card(
+            heading,
+            rows,
+            footer,
+            hold=3.5,
+            captions=(
+                "Smart Bury has three basic commands:",
+                "switch through buffers, switch to the ~other~, and bury,",
+                "which {smart-bury-mode} binds.",
+            ),
+        )
 
     def wrapped_row(self, vanilla: str, wrapper: str, note: str) -> VGroup:
         arrow = Text("→", font_size=28, color=DIM_COLOR)
@@ -1171,17 +1215,11 @@ class SmartBuryIntro(Scene):
                 "on whatever key it is bound to",
             ),
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.6)
-        rows.move_to(UP * 0.5)
+        rows.move_to(UP * 0.8)  # room for the caption below the footer
         footer = (
             VGroup(
                 rich_text(
                     "{smart-bury-mode} remaps them.",
-                    font_size=26,
-                    color=DIM_COLOR,
-                ),
-                rich_text(
-                    "They do their usual job, then continue the same "
-                    "~smart~ sequence.",
                     font_size=26,
                     color=DIM_COLOR,
                 ),
@@ -1191,18 +1229,23 @@ class SmartBuryIntro(Scene):
                     font_size=22,
                     color=DIM_COLOR,
                 ),
-                rich_text(
-                    "{smart-bury-repeatable-commands} (`C-x 2`, `C-x 3`) "
-                    "only arm the repeat map.",
-                    font_size=22,
-                    color=DIM_COLOR,
-                ),
             )
             .arrange(DOWN, buff=0.25)
-            .move_to(DOWN * 2.35)
+            .move_to(DOWN * 2.0)
         )
-        # Longer than the other card's hold: one more line to read.
-        self.show_card(heading, rows, footer, hold=6)
+        # "The list is customizable…", aligned with the rows' left edge.
+        footer[1].align_to(rows, LEFT)
+        self.show_card(
+            heading,
+            rows,
+            footer,
+            hold=3.5,
+            captions=(
+                "Two Emacs commands are wrapped too:",
+                "|quit-window| and |kill-current-buffer|,",
+                "which continue the same ~smart sequence~.",
+            ),
+        )
 
     # The session
 
@@ -1217,6 +1260,10 @@ class SmartBuryIntro(Scene):
             "Emacs keeps a “list of all buffers” (most recently used first).",
             wait=0,
         )
+        # The Emacs frame and the keys panel appear with the list.
+        minibuffer_hint = self.at_minibuffer(
+            Text("minibuffer", font_size=20, color=DIM_COLOR)
+        )
         self.play(
             AnimationGroup(
                 *(
@@ -1226,22 +1273,6 @@ class SmartBuryIntro(Scene):
                 lag_ratio=0.15,
             ),
             FadeIn(self.list_labels),
-        )
-        self.wait(0.8)
-
-        self.say(
-            "The 1st is the ~current buffer~; the 2nd is the ~other buffer~.",
-            wait=0,
-        )
-        self.play(Create(self.current_frame), FadeIn(self.current_label))
-        self.play(Create(self.other_frame), FadeIn(self.other_label))
-        self.wait(1.2)
-
-        minibuffer_hint = self.at_minibuffer(
-            Text("minibuffer", font_size=20, color=DIM_COLOR)
-        )
-        # The Emacs frame and the keys panel appear together.
-        self.play(
             Create(self.frame_outline),
             FadeIn(self.mode_line),
             FadeIn(self.mode_line_label),
@@ -1251,7 +1282,18 @@ class SmartBuryIntro(Scene):
         )
         self.add(self.minibuffer)
         self.wait(0.8)
-        self.play(FadeOut(minibuffer_hint))
+
+        self.say(
+            "The 1st is the ~current buffer~; the 2nd is the ~other buffer~.",
+            wait=0,
+        )
+        self.play(Create(self.current_frame), FadeIn(self.current_label))
+        self.play(
+            Create(self.other_frame),
+            FadeIn(self.other_label),
+            FadeOut(minibuffer_hint),
+        )
+        self.wait(1.2)
 
     def vanilla_way(self) -> None:
         self.say(
@@ -1490,16 +1532,19 @@ class SmartBuryIntro(Scene):
         """C-x 3 arms the repeat map, so `_' right away fills the selected
         window with another buffer; the initial buffer, still shown in the
         right window, keeps its place in the sequence."""
+        # The footnote stays through the next caption too.
+        see_note = "^ See {smart-bury-repeatable-commands}"
         self.split_window_right(
             "`C-x 3`^ splits the window and arms the repeat map.",
             expect="DACEB",
-            footnote="^ See {smart-bury-repeatable-commands}",
+            footnote=see_note,
         )
         self.press(
             "_",
             self.sim.switch_through,
             'So `_` right away shows "A"…',
             expect="ADCEB",
+            footnote=see_note,
         )
         self.press(
             "_",
@@ -1559,9 +1604,9 @@ class SmartBuryIntro(Scene):
         negative: that much silence follows the speech)."""
         if self.narrator is None:
             return
-        # Each caption lasts until the next, the last one until the outro.
+        # Each caption lasts until the next, the last one until the end.
         ends = [entry[1] for entry in self.narration_log[1:]]
-        ends.append(self.outro_start)
+        ends.append(self.narration_end)
         print(" #  scene  speech   diff  caption")
         for index, ((text, start, speech, waited), end) in enumerate(
                 zip(self.narration_log, ends), 1):
@@ -1580,10 +1625,7 @@ class SmartBuryIntro(Scene):
             self.subtitle = None
 
     def outro(self) -> None:
-        self.finish_speech()
-        self.outro_start = self.time
-        self.end_subtitle()
-        self.clear_all()
+        self.close_card()
         title = Text(
             "Smart Bury", font_size=64, weight="BOLD", color=TITLE_COLOR
         )
@@ -1613,11 +1655,17 @@ class SmartBuryIntro(Scene):
         VGroup(title, tagline, VGroup(setup_box, setup), link).arrange(
             DOWN, buff=0.45
         )
+        self.say("That’s Smart Bury.", wait=0)
         self.play(FadeIn(title, shift=UP * 0.2), FadeIn(tagline))
+        self.say("To try it, enable {smart-bury-mode} and {repeat-mode} in "
+                 "your init file.", wait=0)
         self.play(
             FadeIn(setup_box), FadeIn(setup, shift=UP * 0.15), FadeIn(link)
         )
         self.wait(4)
+        self.finish_speech()
+        self.narration_end = self.time
+        self.end_subtitle()
         self.play(
             *(FadeOut(mobject) for mobject in self.mobjects), run_time=2.5
         )

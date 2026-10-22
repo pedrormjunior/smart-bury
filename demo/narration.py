@@ -62,14 +62,15 @@ def spoken(text: str) -> str:
     """The words to say for caption TEXT, in the intro's markup.
 
     Keys (`C-x M--`) are named, a comma between the keys of a sequence;
-    symbols ({smart-bury-mode}) lose their hyphens; italics (~other
+    symbols ({smart-bury-mode}, |quit-window|) lose their hyphens; italics (~other
     buffer~) are plain; footnote markers (^) go.  Buffer names stay in their double quotes ("A"),
     which make Kokoro say the letter rather than the article "a".
     """
     text = re.sub(r"`([^`]*)`",
                   lambda m: ", ".join(map(spoken_key, m.group(1).split())),
                   text)
-    text = re.sub(r"\{([^}]*)\}", lambda m: m.group(1).replace("-", " "),
+    text = re.sub(r"\{([^}]*)\}|\|([^|]*)\|",
+                  lambda m: (m.group(1) or m.group(2)).replace("-", " "),
                   text)
     return text.replace("~", "").replace("^", "")
 
