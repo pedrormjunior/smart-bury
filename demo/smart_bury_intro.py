@@ -806,6 +806,7 @@ class SmartBuryIntro(Scene):
         fast: bool = False,
         pace: float = 1.0,
         footnote: str | None = None,
+        hold: float | None = None,
     ) -> None:
         """Press KEYS, run the model's ACTION, and animate the result.
 
@@ -815,6 +816,8 @@ class SmartBuryIntro(Scene):
         buffer order the storyboard expects.  PACE scales every duration
         but the caption's fade, e.g. to end a part about when its
         narration does.  FOOTNOTE goes with the caption (see `say').
+        HOLD, if given, replaces the pause after the step, e.g. 0 to go
+        straight on to the next one.
         """
         if caption:
             self.say(caption, wait=(0.25 if fast else 0.5) * pace,
@@ -863,6 +866,8 @@ class SmartBuryIntro(Scene):
             self.glow_off(glowing, halos, run_time=0.3 * pace)
             self.remove(glowing[0])  # the minibuffer's overlay
         wait = (0.35 if fast else max(1.0, 0.15 * len(caption.split()))) * pace
+        if hold is not None:
+            wait = hold
         suffix = keys.split()[-1]
         if keys.startswith("C-x ") and suffix in REPEAT_KEYS:
             # repeat-mode's message has just appeared: highlight the key
@@ -1235,23 +1240,18 @@ class SmartBuryIntro(Scene):
         minibuffer_hint = self.at_minibuffer(
             Text("minibuffer", font_size=20, color=DIM_COLOR)
         )
+        # The Emacs frame and the keys panel appear together.
         self.play(
             Create(self.frame_outline),
             FadeIn(self.mode_line),
             FadeIn(self.mode_line_label),
             Create(self.window_body, lag_ratio=0.2),
             FadeIn(minibuffer_hint),
+            FadeIn(self.keys_panel),
         )
         self.add(self.minibuffer)
         self.wait(0.8)
-        self.play(
-            Indicate(minibuffer_hint, color=CURRENT_COLOR, scale_factor=1.25),
-            run_time=1.2,
-        )
         self.play(FadeOut(minibuffer_hint))
-
-        self.play(FadeIn(self.keys_panel))
-        self.wait(1)
 
     def vanilla_way(self) -> None:
         self.say(
@@ -1439,31 +1439,34 @@ class SmartBuryIntro(Scene):
             pace=0.78,
         )
         self.press("_", self.sim.switch_through, expect="ABCDE", pace=0.78)
-        # Under this caption, the cycle again, faster, typing included;
+        # Under this caption, the cycle again, extra fast, typing included;
         # the burying part's typing in A ends it.  It starts with typing
         # too: C-x _ right after the last _ would continue that sequence.
         self.say(
             "(This way we easily cycle among 3 buffers.)",
             wait=0.5,
         )
-        self.work(expect="ABCDE", pace=0.6)
+        self.work(expect="ABCDE", pace=0.3)
         for first, second in (("BACDE", "CABDE"), ("ACBDE", "BCADE"),
                               ("CBADE", "ABCDE")):
             self.press("C-x _", self.sim.switch_through, expect=first,
-                       fast=True, pace=0.6)
+                       fast=True, pace=0.3)
+            # Typing starts as soon as the intended buffer shows.
             self.press("_", self.sim.switch_through, expect=second,
-                       fast=True, pace=0.6)
+                       fast=True, pace=0.3, hold=0)
             if second != "ABCDE":
-                self.work(expect=second, pace=0.6)
+                self.work(expect=second, pace=0.3)
 
     def why_smart(self) -> None:
         """The "smart" in Smart Bury: a buffer buried right after reaching
-        it was just on the way, so the sequence goes on instead of back."""
+        it was just on the way, so the sequence goes on instead of back;
+        a further `_' then goes deeper still, leaving the buffer passed
+        (C) near the top of the list."""
         # repeat-mode is still active, so plain keys continue.
         self.press(
             "_",
             self.sim.switch_through,
-            'Aiming at "C" again, `_` goes to "B"…',
+            'Aiming at "D", `_` goes to "B"…',
             expect="BACDE",
         )
         self.press(
@@ -1473,14 +1476,14 @@ class SmartBuryIntro(Scene):
             expect="CADEB",
         )
         self.say(
-            '("B" was simply on the way to "C".)',
+            '(Consider "B" is no longer required.)',
             wait=2.5,
         )
         self.press(
-            "M-_",
-            self.sim.switch_to_other,
-            "`M-_` goes back to the ~initial buffer~.",
-            expect="ACDEB",
+            "_",
+            self.sim.switch_through,
+            '`_` goes on to "D", considering "C" may be needed soon.',
+            expect="DACEB",
         )
 
     def splitting_the_window(self) -> None:
@@ -1489,20 +1492,20 @@ class SmartBuryIntro(Scene):
         right window, keeps its place in the sequence."""
         self.split_window_right(
             "`C-x 3`^ splits the window and arms the repeat map.",
-            expect="ACDEB",
+            expect="DACEB",
             footnote="^ See {smart-bury-repeatable-commands}",
         )
         self.press(
             "_",
             self.sim.switch_through,
-            'So `_` right away shows "C"…',
-            expect="CADEB",
+            'So `_` right away shows "A"…',
+            expect="ADCEB",
         )
         self.press(
             "_",
             self.sim.switch_through,
-            '…and `_` again goes on to "D".',
-            expect="DACEB",
+            '…and `_` again goes on to "C".',
+            expect="CDAEB",
         )
 
     def footnote_text_mobject(self, text: str) -> VGroup:
