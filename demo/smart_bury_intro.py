@@ -1159,7 +1159,7 @@ class SmartBuryIntro(Scene):
         rows = VGroup(
             self.command_row(
                 "C-x _",
-                "Go to the ~other buffer~, then one deeper per "
+                "Go to the ~other buffer~, then one buffer deeper per "
                 "`_`*, burying nothing.",
                 "smart-bury-switch-through-buffers",
             ),
@@ -1171,7 +1171,7 @@ class SmartBuryIntro(Scene):
             ),
             self.command_row(
                 "C-x M--",
-                "Bury the ~current buffer~, and move on smartly.",
+                "Bury the ~current buffer~ and move on smartly.",
                 "smart-bury-bury-buffer",
             ),
         )
@@ -1206,8 +1206,9 @@ class SmartBuryIntro(Scene):
             hold=3.5,
             captions=(
                 "Smart Bury has three basic commands:",
-                "switch through buffers, switch to the ~other buffer~, and bury,",
-                "which {smart-bury-mode} binds.",
+                "switch through buffers, switch to the ~other buffer~, and bury the "
+                "current one,",
+                "all bound by {smart-bury-mode}.",
             ),
         )
 
@@ -1261,9 +1262,9 @@ class SmartBuryIntro(Scene):
             footer,
             hold=3.5,
             captions=(
-                "Two Emacs commands are wrapped too:",
+                "Two Emacs commands are also wrapped:",
                 "|quit-window| and |kill-current-buffer|,",
-                "which continue the same ~smart sequence~.",
+                "which, once wrapped, continue the same ~smart sequence~.",
             ),
         )
 
@@ -1304,7 +1305,7 @@ class SmartBuryIntro(Scene):
         self.wait(0.8)
 
         self.say(
-            "The 1st is the ~current buffer~; the 2nd is the ~other buffer~.",
+            "The first is the ~current buffer~; the second, the ~other buffer~.",
             wait=0,
         )
         self.play(Create(self.current_frame), FadeIn(self.current_label))
@@ -1317,12 +1318,12 @@ class SmartBuryIntro(Scene):
 
     def vanilla_way(self) -> None:
         self.say(
-            "Usually, going to a 3rd buffer means typing its name:",
+            "Usually, going to a third buffer means typing its name:",
             wait=2,
         )
         self.switch_to_buffer(
             "C",
-            '`C-x b` and typing "C", in this case.',
+            'Here, `C-x b`, then typing "C".',
             expect="CABDE",
         )
         self.switch_to_buffer(
@@ -1330,7 +1331,7 @@ class SmartBuryIntro(Scene):
             'Then `C-x b` `RET` is enough to come back to "A", the ~other buffer~.',
             expect="ACBDE",
         )
-        self.say('Notice it leaves "C" ahead of "B".', wait=0)
+        self.say('This leaves "C" ahead of "B".', wait=0)
         self.play(
             Indicate(self.boxes["C"], color=WHITE),
             Indicate(self.boxes["B"], color=WHITE),
@@ -1339,7 +1340,7 @@ class SmartBuryIntro(Scene):
         self.wait(0.6)
         self.switch_to_buffer(
             "B",
-            "Putting it back in order… more typing.",
+            "Putting the list back in order takes more typing.",
             expect="BACDE",
             fast=True,
         )
@@ -1375,7 +1376,7 @@ class SmartBuryIntro(Scene):
     def switching_through(self) -> None:
         self.counter_text.become(self.counter_label(self.sim.counter))
         self.say(
-            "Smart Bury remembers where a ~sequence~ started, "
+            "Smart Bury remembers where a ~sequence~ started "
             "and how deep it is.",
             wait=0,
         )
@@ -1405,14 +1406,14 @@ class SmartBuryIntro(Scene):
         self.press(
             "_",
             self.sim.switch_through,
-            "Each `_` goes one buffer further, burying nothing.",
+            "Each `_` goes one buffer deeper, burying nothing.",
             expect="CABDE",
         )
         self.press("_", self.sim.switch_through, expect="DABCE", fast=True)
         self.press(
             "_",
             self.sim.switch_through,
-            'Once in "E", initial buffer "A" is the ~other buffer~.',
+            'Buffer "A", where the ~sequence~ started, stays the ~other buffer~.',
             expect="EABCD",
         )
         self.press(
@@ -1436,7 +1437,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "M-_",
             self.sim.switch_to_other,
-            "…and `M-_` switches back, as many times as wanted.",
+            "…and `M-_` switches back and forth, as many times as needed.",
             expect="ABCDE",
         )
         # A and B trade places twice more, extra fast: about 1.5 s of
@@ -1450,11 +1451,11 @@ class SmartBuryIntro(Scene):
         # repeat-mode is still active from the previous part, so a plain
         # `_' continues the same key sequence.
         # The footnote stays through the next caption too.
-        repeat_note = "^ Repeat map still active"
+        repeat_note = "^ The repeat map is still active."
         self.press(
             "_",
             self.sim.switch_through,
-            'Aiming at "D", `_`^ `_` `_` goes there.',
+            'To get to "D": `_`^ `_` `_`.',
             expect="BACDE",
             fast=True,
             pace=0.8,
@@ -1467,7 +1468,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "M-_",
             self.sim.switch_to_other,
-            "`M-_` goes back to the ~initial buffer~.",
+            "Then `M-_` goes back to the ~initial buffer~.",
             expect="ABCDE",
             pace=0.8,
             footnote=repeat_note,
@@ -1475,7 +1476,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "_",
             self.sim.switch_through,
-            'Aiming at "C", `_` `_` goes there.',
+            'To get to "C": `_` `_`.',
             expect="BACDE",
             fast=True,
             pace=0.95,
@@ -1486,7 +1487,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "C-x _",
             self.sim.switch_through,
-            'Aiming at "B", `C-x _` `_` goes there.',
+            'To get to "B": `C-x _` `_`.',
             expect="ACBDE",
             fast=True,
             pace=0.8,
@@ -1496,7 +1497,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "C-x _",
             self.sim.switch_through,
-            'To be back on "A", `C-x _` `_` again.',
+            'And back to "A": `C-x _` `_` again.',
             expect="CBADE",
             fast=True,
             pace=0.78,
@@ -1506,7 +1507,7 @@ class SmartBuryIntro(Scene):
         # the burying part's typing in A ends it.  It starts with typing
         # too: C-x _ right after the last _ would continue that sequence.
         self.say(
-            "(This way we easily cycle among 3 buffers.)",
+            "This way, we easily cycle among three buffers.",
             wait=0.5,
         )
         self.work(expect="ABCDE", pace=0.3)
@@ -1529,7 +1530,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "_",
             self.sim.switch_through,
-            'Aiming at "D", `_` goes to "B"…',
+            'Heading for "D", `_` first goes to "B"…',
             expect="BACDE",
         )
         self.press(
@@ -1541,7 +1542,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "_",
             self.sim.switch_through,
-            'One more `_` goes on to "D", considering "C" may be needed soon.',
+            'One more `_` reaches "D", leaving "C" near the top for later.',
             expect="DACEB",
         )
 
@@ -1566,7 +1567,7 @@ class SmartBuryIntro(Scene):
         self.press(
             "_",
             self.sim.switch_through,
-            '…and `_` again goes on to "C".',
+            '…and another `_` goes on to "C".',
             expect="CDAEB",
         )
 
