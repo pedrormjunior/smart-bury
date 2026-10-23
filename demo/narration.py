@@ -149,19 +149,16 @@ class Narrator:
                    if timings_path.exists() else [])
         return path, soundfile.info(path).duration, timings
 
-    def phrase_time(self, words: str, phrase: str, timings: list,
-                    nth: int = 1) -> float | None:
-        """When the NTH PHRASE of WORDS starts being said, from TIMINGS
+    def time_at(self, words: str, index: int,
+                timings: list) -> float | None:
+        """When WORDS' INDEXth character starts being said, from TIMINGS
         (see `clip'), or None without timings.
 
-        The phonemes of the words before PHRASE, counted as the model
-        tokenizes them, give the index of PHRASE's first phoneme.
+        The phonemes of the words before it, counted as the model
+        tokenizes them, give the index of its first phoneme.
         """
         if not timings:
             return None
-        index = -1
-        for _ in range(nth):
-            index = words.index(phrase, index + 1)
         tokenizer = self.kokoro().tokenizer
         before = " ".join(tokenizer.phonemize(words[:index]).split())
         count = len(tokenizer.known(before)) + (1 if before else 0)
