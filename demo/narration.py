@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 from pathlib import Path
 
@@ -30,7 +31,12 @@ import numpy as np
 import soundfile
 
 HERE = Path(__file__).parent
-MODEL = HERE / "voice-models" / "kokoro-v1.0.onnx"   # full precision
+# Kokoro v1.0, full precision: exported with a durations output when
+# `make voice-model-timed' has built it (continuous synthesis, phoneme
+# timings; see README.md), else kokoro-onnx's prebuilt one.
+MODEL_TIMED = HERE / "voice-models" / "kokoro-v1.0-timed.onnx"
+MODEL = (MODEL_TIMED if MODEL_TIMED.exists()
+         else HERE / "voice-models" / "kokoro-v1.0.onnx")
 VOICES = HERE / "voice-models" / "voices-v1.0.bin"
 CACHE = HERE / "media" / "voice"
 
@@ -93,34 +99,73 @@ def spoken(text: str) -> str:
 
 
 class Narrator:
-    """Speaks captions in VOICE at SPEED, caching each clip."""
+    """Speaks captions in VOICE at SPEED, caching each clip.
+
+    With a model reporting durations (see MODEL), synthesis is
+    continuous, keeping the intonation flowing across the chunks a text
+    is split into, and each clip comes with phoneme timings.
+    """
 
     def __init__(self, voice: str, speed: float = 1.0) -> None:
         self.voice = voice
         self.speed = speed
         self._kokoro = None
+        self.timed = False      # whether the model reports durations
 
     def kokoro(self):
         if self._kokoro is None:
             from kokoro_onnx import Kokoro    # slow import: only when needed
             self._kokoro = Kokoro(str(MODEL), str(VOICES))
+            self.timed = len(self._kokoro.sess.get_outputs()) > 1
         return self._kokoro
 
-    def synthesize(self, words: str) -> tuple[np.ndarray, int]:
-        return self.kokoro().create(words, voice=self.voice,
-                                    speed=self.speed, lang="en-us")
+    def synthesize_timed(self, words: str) -> tuple[np.ndarray, int, list]:
+        """WORDS' audio, its sample rate, and its phoneme timings (none
+        without a model reporting durations)."""
+        kokoro = self.kokoro()
+        return kokoro.create_timed(words, voice=self.voice, speed=self.speed,
+                                   lang="en-us", continuous=self.timed)
 
-    def clip(self, words: str) -> tuple[Path, float]:
-        """The WAV file saying WORDS, and its duration in seconds."""
+    def synthesize(self, words: str) -> tuple[np.ndarray, int]:
+        samples, rate, _ = self.synthesize_timed(words)
+        return samples, rate
+
+    def clip(self, words: str) -> tuple[Path, float, list[tuple]]:
+        """The WAV file saying WORDS, its duration in seconds, and its
+        phoneme timings, as (phoneme, start, end) tuples, cached in a
+        JSON file next to it."""
         key = f"{MODEL.name}|{self.voice}|{self.speed}|{words}"
         path = CACHE / f"{hashlib.sha1(key.encode()).hexdigest()}.wav"
+        timings_path = path.with_suffix(".json")
         if not path.exists():
-            samples, rate = self.synthesize(words)
+            samples, rate, timings = self.synthesize_timed(words)
             path.parent.mkdir(parents=True, exist_ok=True)
+            timings_path.write_text(json.dumps(
+                [(t.phoneme, t.start, t.end) for t in timings]))
             partial = path.with_suffix(".part.wav")
             soundfile.write(partial, samples, rate)
             partial.rename(path)
-        return path, soundfile.info(path).duration
+        timings = (json.loads(timings_path.read_text())
+                   if timings_path.exists() else [])
+        return path, soundfile.info(path).duration, timings
+
+    def phrase_time(self, words: str, phrase: str, timings: list,
+                    nth: int = 1) -> float | None:
+        """When the NTH PHRASE of WORDS starts being said, from TIMINGS
+        (see `clip'), or None without timings.
+
+        The phonemes of the words before PHRASE, counted as the model
+        tokenizes them, give the index of PHRASE's first phoneme.
+        """
+        if not timings:
+            return None
+        index = -1
+        for _ in range(nth):
+            index = words.index(phrase, index + 1)
+        tokenizer = self.kokoro().tokenizer
+        before = " ".join(tokenizer.phonemize(words[:index]).split())
+        count = len(tokenizer.known(before)) + (1 if before else 0)
+        return timings[min(count, len(timings) - 1)][1]
 
 
 def write_samples() -> None:

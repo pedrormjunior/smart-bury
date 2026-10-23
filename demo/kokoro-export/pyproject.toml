@@ -1,0 +1,36 @@
+# Environment for exporting Kokoro's original weights to ONNX with a
+# durations output (see build.sh and ../README.md).  Only used once, to
+# build ../voice-models/kokoro-v1.0-timed.onnx; the narration itself runs
+# in ../pyproject.toml's environment.
+[project]
+name = "smart-bury-kokoro-export"
+version = "0.1.0"
+description = "Export Kokoro with durations, for the intro's narration"
+# export.py needs >= 3.12; kokoro 0.8.4 doesn't support 3.13.
+requires-python = "==3.12.*"
+# The dependencies export.py declares (its PEP 723 header), plus torch,
+# pinned to the CPU-only build below, and huggingface_hub, which its
+# verification uses to fetch a voice.
+dependencies = [
+    "coloredlogs",
+    "huggingface_hub",
+    "kokoro==0.8.4",
+    "numpy",
+    "onnx>=1.17.0",
+    "onnxruntime>=1.20.1",
+    "onnxscript>=0.5.0",
+    "psutil",
+    "torch",
+]
+
+[tool.uv]
+package = false
+
+# CPU-only PyTorch, instead of PyPI's multi-GB GPU build.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }

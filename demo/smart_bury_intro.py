@@ -606,13 +606,16 @@ class SmartBuryIntro(Scene):
         self.finish_speech()
         self.end_subtitle()
         self.subtitle = (subtitle_text(text), self.time)
-        # For `cue': what is said, from when, and for how long.
+        # For `cue': what is said, from when, for how long, and when each
+        # phoneme is said (with a model reporting durations).
         self.caption_words = spoken(text) if speech is None else speech
         self.caption_start = self.time
         self.caption_speech = None
+        self.caption_timings = []
         if self.narrator is not None:
-            path, duration = self.narrator.clip(self.caption_words)
+            path, duration, timings = self.narrator.clip(self.caption_words)
             self.caption_speech = duration
+            self.caption_timings = timings
             # Not `add_sound': it drops the sound when the previous
             # animation came from Manim's cache, whose skipping state
             # lasts until the next animation starts.
@@ -1579,18 +1582,25 @@ class SmartBuryIntro(Scene):
         """Wait until the current caption's narration reaches its NTH
         PHRASE, or LEAD seconds before.
 
-        Estimated from where PHRASE is in the words said, as a share of
-        the speech's length; without narration, of a reading speed of 15
-        characters per second.
+        With phoneme timings, when PHRASE's first phoneme is said (see
+        `Narrator.phrase_time'); otherwise estimated from where PHRASE is
+        in the words said, as a share of the speech's length, or,
+        without narration, of a reading speed of 15 characters per
+        second.
         """
         words = self.caption_words
-        index = -1
-        for _ in range(nth):
-            index = words.index(phrase, index + 1)
-        share = index / len(words)
-        length = (self.caption_speech if self.caption_speech is not None
-                  else len(words) / 15)
-        remaining = self.caption_start + share * length - lead - self.time
+        start = None
+        if self.narrator is not None:
+            start = self.narrator.phrase_time(words, phrase,
+                                              self.caption_timings, nth)
+        if start is None:
+            index = -1
+            for _ in range(nth):
+                index = words.index(phrase, index + 1)
+            length = (self.caption_speech if self.caption_speech is not None
+                      else len(words) / 15)
+            start = index / len(words) * length
+        remaining = self.caption_start + start - lead - self.time
         if remaining > 0:
             self.wait(remaining)
 

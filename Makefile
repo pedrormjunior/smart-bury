@@ -1,4 +1,4 @@
-.PHONY: test compile checkdoc package-lint demo-check demo-preview demo intro-check intro intro-part intro-narration voice-models voice-samples test-interactively test-emacs-defaults-interactively
+.PHONY: test compile checkdoc package-lint demo-check demo-preview demo intro-check intro intro-part intro-narration voice-models voice-model-timed voice-model-check voice-model-clean voice-samples test-interactively test-emacs-defaults-interactively
 
 test:
 	emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el \
@@ -81,7 +81,7 @@ VOICE = am_michael
 # demo/smart-bury-intro-INTRO_QUALITY.mp4, with the captions as
 # subtitles in demo/smart-bury-intro-INTRO_QUALITY.srt.
 INTRO_OUTPUT = demo/media/videos/smart_bury_intro/$(INTRO_QUALITY)/smart-bury-intro
-intro: demo-check $(if $(VOICE),voice-models)
+intro: demo-check $(if $(VOICE),voice-models voice-model-timed)
 	@test -n "$(MANIM_QUALITY_$(INTRO_QUALITY))" || \
 	  { echo "unknown INTRO_QUALITY: $(INTRO_QUALITY)"; exit 1; }
 	cd demo && SMART_BURY_VOICE=$(VOICE) \
@@ -123,6 +123,25 @@ voice-models: $(VOICE_MODELS)
 demo/voice-models/%:
 	mkdir -p demo/voice-models
 	curl -fL -o $@.part $(VOICE_MODELS_URL)/$* && mv $@.part $@
+
+# Kokoro v1.0 exported with a durations output, for continuous synthesis
+# and phoneme timings: demo/kokoro-export/build.sh downloads the export
+# script and the original weights, exports, and checks the result (see
+# demo/README.md).
+VOICE_MODEL_TIMED = demo/voice-models/kokoro-v1.0-timed.onnx
+
+voice-model-timed: $(VOICE_MODEL_TIMED)
+
+$(VOICE_MODEL_TIMED): demo/voice-models/voices-v1.0.bin
+	demo/kokoro-export/build.sh
+
+voice-model-check: $(VOICE_MODEL_TIMED)
+	cd demo && uv run python kokoro-export/check.py
+
+# What voice-model-timed builds, removed to build it again from scratch.
+voice-model-clean:
+	rm -rf demo/voice-models/checkpoints demo/kokoro-export/export.py \
+	  demo/kokoro-export/.venv $(VOICE_MODEL_TIMED)
 
 # A few captions in each candidate voice, into demo/voice-samples/.
 voice-samples: voice-models

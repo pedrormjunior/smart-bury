@@ -4,4 +4,6 @@
 /demo/media/
 /demo/voice-models/
 /demo/voice-samples/
+/demo/kokoro-export/.venv/
+/demo/kokoro-export/export.py
 __pycache__/
