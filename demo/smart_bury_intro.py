@@ -689,8 +689,12 @@ class SmartBuryIntro(Scene):
         speech: str | None = None,
         footnote: str | None = None,
         quiet: str = "",
+        visible: bool = True,
     ) -> None:
         """Replace the caption at the bottom (see `parse_rich' for TEXT).
+
+        Not VISIBLE, it is only narrated and a subtitle, for screens that
+        already show their text (the title, the cards, the outro).
 
         FOOTNOTE, if any, is shown below the caption while it lasts, in
         smaller, dimmer text; it is neither spoken nor a subtitle.  Mark
@@ -747,6 +751,10 @@ class SmartBuryIntro(Scene):
                     - PULSE_LEAD
                     + self.caption_time_at(match.start())
                 )
+        if not visible:
+            if wait > 0:
+                self.wait(wait)
+            return
         new = rich_text(text, font_size=26, color=WHITE)  # captions: white
         if new.width > 13:
             new.scale_to_fit_width(13)
@@ -1245,11 +1253,7 @@ class SmartBuryIntro(Scene):
         )
         tagline = Text(TAGLINE, font_size=30, color=DIM_COLOR)
         VGroup(title, tagline).arrange(DOWN, buff=0.4)
-        self.say(
-            "Smart Bury: switching buffers in Emacs with a few key "
-            "presses.",
-            wait=0,
-        )
+        self.say(f"{TAGLINE}.", wait=0, visible=False)
         self.play(Write(title), FadeIn(tagline, shift=UP * 0.2))
         self.wait(2)
         self.close_card()
@@ -1277,12 +1281,14 @@ class SmartBuryIntro(Scene):
     ) -> None:
         """Show a card: HEADING, ROWS, then FOOTER, held HOLD seconds.
 
+        CAPTIONS are narrated and subtitles, not shown (see `say').
+
         The first of CAPTIONS comes with the heading; the rows and then
         the footer's lines appear one by one right after the heading;
         the other captions follow, each as soon as the previous one's
         speech ends.  The footer is neither said nor captioned.
         """
-        self.say(captions[0], wait=0)
+        self.say(captions[0], wait=0, visible=False)
         self.play(FadeIn(heading, shift=DOWN * 0.15), run_time=0.6)
         items = [
             *(FadeIn(row, shift=RIGHT * 0.3) for row in rows),
@@ -1292,7 +1298,7 @@ class SmartBuryIntro(Scene):
             AnimationGroup(*items, lag_ratio=0.5), run_time=0.45 * len(items)
         )
         for caption in captions[1:]:
-            self.say(caption, wait=0)
+            self.say(caption, wait=0, visible=False)
         self.wait(hold)
         self.close_card()
 
@@ -1328,8 +1334,7 @@ class SmartBuryIntro(Scene):
         column = max(row[0].width for row in rows)
         for row in rows:
             row[1].next_to(row[0], RIGHT, buff=0.45 + column - row[0].width)
-        # Up a little, leaving room for the caption below the footer.
-        rows.arrange(DOWN, aligned_edge=LEFT, buff=0.35).move_to(UP * 0.42)
+        rows.arrange(DOWN, aligned_edge=LEFT, buff=0.35).move_to(UP * 0.2)
         footer = VGroup(
             rich_text(
                 "{smart-bury-mode} binds these keys.",
@@ -1343,9 +1348,8 @@ class SmartBuryIntro(Scene):
                 color=DIM_COLOR,
             ),
         ).arrange(DOWN, buff=0.12)
-        # Rows and footer centered between the heading and the caption,
-        # 0.45 apart.
-        footer.move_to(DOWN * 1.94)
+        # Rows and footer centered below the heading, 0.45 apart.
+        footer.move_to(DOWN * 2.16)
         # The note for the asterisk, aligned with the rows' left edge.
         footer[1].align_to(rows, LEFT)
         self.show_card(
@@ -1385,7 +1389,7 @@ class SmartBuryIntro(Scene):
                 "on whatever key it is bound to",
             ),
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.6)
-        rows.move_to(UP * 0.8)  # room for the caption below the footer
+        rows.move_to(UP * 0.5)
         footer = (
             VGroup(
                 rich_text(
@@ -1401,7 +1405,7 @@ class SmartBuryIntro(Scene):
                 ),
             )
             .arrange(DOWN, buff=0.25)
-            .move_to(DOWN * 2.0)
+            .move_to(DOWN * 2.35)
         )
         # "The list is customizable…", aligned with the rows' left edge.
         footer[1].align_to(rows, LEFT)
@@ -1911,11 +1915,12 @@ class SmartBuryIntro(Scene):
         VGroup(title, tagline, VGroup(setup_box, setup), link).arrange(
             DOWN, buff=0.45
         )
-        self.say("That’s Smart Bury.", wait=0)
+        self.say("That’s Smart Bury.", wait=0, visible=False)
         self.play(FadeIn(title, shift=UP * 0.2), FadeIn(tagline))
         self.say(
             "To try it, enable {smart-bury-mode} and {repeat-mode} in Emacs.",
             wait=0,
+            visible=False,
         )
         self.play(
             FadeIn(setup_box), FadeIn(setup, shift=UP * 0.15), FadeIn(link)
