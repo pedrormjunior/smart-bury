@@ -214,10 +214,12 @@ def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
 
 
 def subtitle_text(text: str) -> str:
-    """TEXT (see `parse_rich') as a subtitle: its markup removed, footnote
-    markers included, except the quotes around buffer names ("A"), kept
-    as in the narration."""
-    return re.sub(r"[`{}|~^]", "", text)
+    """TEXT (see `parse_rich') as a plain subtitle: its markup removed,
+    footnote markers included, except the quotes around buffer names
+    ("A"), kept as in the narration, and keys quoted, as their boxes in
+    the video ("C-x _")."""
+    text = re.sub(r"`([^`]*)`", r'"\1"', text)
+    return re.sub(r"[{}|~^]", "", text)
 
 
 def ttml_text(text: str) -> str:
@@ -1358,8 +1360,8 @@ class SmartBuryIntro(Scene):
                 color=DIM_COLOR,
             ),
         ).arrange(DOWN, buff=0.12)
-        # Rows and footer centered below the heading, 0.45 apart.
-        footer.move_to(DOWN * 2.16)
+        # The footer a little below the rows.
+        footer.move_to(DOWN * 2.45)
         # The note for the asterisk, aligned with the rows' left edge.
         footer[1].align_to(rows, LEFT)
         self.show_card(
@@ -1624,16 +1626,13 @@ class SmartBuryIntro(Scene):
     def breaking_the_sequence(self) -> None:
         # repeat-mode is still active from the previous part, so a plain
         # `_' continues the same key sequence.
-        # The footnote stays through the next caption too.
-        repeat_note = "^ The repeat map is still active."
         self.press(
             "_",
             self.sim.switch_through,
-            'To get to "D": `_`^ `_` `_`.',
+            'To get to "D": `_` `_` `_`.',
             expect="BACDE",
             fast=True,
             pace=0.8,
-            footnote=repeat_note,
         )
         self.press(
             "_", self.sim.switch_through, expect="CABDE", fast=True, pace=0.8
@@ -1647,12 +1646,13 @@ class SmartBuryIntro(Scene):
             "Then `M-_` goes back to the ~initial buffer~.",
             expect="ABCDE",
             pace=0.8,
-            footnote=repeat_note,
         )
+        # Typing in A ends that sequence, so C-x _ starts the next one.
+        self.work(expect="ABCDE", pace=0.8)
         self.press(
-            "_",
+            "C-x _",
             self.sim.switch_through,
-            'To get to "C": `_` `_`.',
+            'To get to "C": `C-x _` `_`.',
             expect="BACDE",
             fast=True,
             pace=0.95,
