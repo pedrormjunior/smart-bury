@@ -40,6 +40,11 @@ MODEL = (MODEL_TIMED if MODEL_TIMED.exists()
 VOICES = HERE / "voice-models" / "voices-v1.0.bin"
 CACHE = HERE / "media" / "voice"
 
+# Pauses Kokoro inserts after sentence and clause marks, in seconds (its
+# defaults are 0.25 and 0.1); with phoneme timings, after every mark.
+SENTENCE_PAUSE = 0.15
+CLAUSE_PAUSE = 0.05
+
 CANDIDATE_VOICES = ["af_heart", "am_michael", "bf_emma", "bm_george"]
 SAMPLE_CAPTIONS = [
     "Emacs keeps a “list of all buffers” (most recently used first).",
@@ -48,6 +53,8 @@ SAMPLE_CAPTIONS = [
     "…and, listed in {smart-bury-repeatable-commands}, it arms the "
     "repeat map.",
 ]
+
+PUNCTUATION = set(".,;:!?…—–-'\"“”()")
 
 MODIFIERS = {"C": "control", "M": "meta", "S": "shift"}
 KEY_NAMES = {"_": "underscore", "-": "minus", "RET": "return",
@@ -124,7 +131,9 @@ class Narrator:
         without a model reporting durations)."""
         kokoro = self.kokoro()
         return kokoro.create_timed(words, voice=self.voice, speed=self.speed,
-                                   lang="en-us", continuous=self.timed)
+                                   lang="en-us", continuous=self.timed,
+                                   sentence_pause=SENTENCE_PAUSE,
+                                   clause_pause=CLAUSE_PAUSE)
 
     def synthesize(self, words: str) -> tuple[np.ndarray, int]:
         samples, rate, _ = self.synthesize_timed(words)
@@ -134,7 +143,8 @@ class Narrator:
         """The WAV file saying WORDS, its duration in seconds, and its
         phoneme timings, as (phoneme, start, end) tuples, cached in a
         JSON file next to it."""
-        key = f"{MODEL.name}|{self.voice}|{self.speed}|{words}"
+        key = (f"{MODEL.name}|{self.voice}|{self.speed}|"
+               f"{SENTENCE_PAUSE}|{CLAUSE_PAUSE}|{words}")
         path = CACHE / f"{hashlib.sha1(key.encode()).hexdigest()}.wav"
         timings_path = path.with_suffix(".json")
         if not path.exists():
@@ -148,6 +158,15 @@ class Narrator:
         timings = (json.loads(timings_path.read_text())
                    if timings_path.exists() else [])
         return path, soundfile.info(path).duration, timings
+
+    @staticmethod
+    def spoken_length(duration: float, timings: list) -> float:
+        """How long a clip of DURATION seconds is spoken for: until its
+        last phoneme that isn't punctuation or a space ends, a final mark
+        carrying the silence after it; DURATION without TIMINGS."""
+        ends = [end for phoneme, _, end in timings
+                if phoneme.strip() and phoneme not in PUNCTUATION]
+        return max(ends) if ends else duration
 
     def time_at(self, words: str, index: int,
                 timings: list) -> float | None:

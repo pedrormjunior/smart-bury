@@ -121,6 +121,8 @@ SIDE_X = 7.11 - MARGIN - KEYS_BOX_WIDTH / 2
 KEYS_Y = 0.2
 CAPTION_Y = -3.3
 FOOTNOTE_Y = CAPTION_Y - 0.5  # a caption's footnote, right below it
+CAPTION_FADE = 0.2  # how long a caption takes to replace the previous one
+SPEECH_DELAY = 0.1  # how long after a shown caption starts its speech does
 PULSE_TIME = 0.8  # how long a buffer's box pulses when the voice names it
 PULSE_LEAD = 0.45  # how much earlier than its name the pulse starts
 KEYS_FONT_SIZE = 26
@@ -714,7 +716,9 @@ class SmartBuryIntro(Scene):
         # For `cue': what is said, from when, for how long, and when each
         # phoneme is said (with a model reporting durations).
         self.caption_words = spoken(text) if speech is None else speech
-        self.caption_start = self.time
+        # The speech starts once a shown caption is mostly in, so the text
+        # doesn't lag behind the voice; cues count from the speech.
+        self.caption_start = self.time + (SPEECH_DELAY if visible else 0)
         self.caption_speech = None
         self.caption_timings = []
         if self.narrator is not None:
@@ -724,10 +728,14 @@ class SmartBuryIntro(Scene):
             # Not `add_sound': it drops the sound when the previous
             # animation came from Manim's cache, whose skipping state
             # lasts until the next animation starts.
-            self.renderer.file_writer.add_sound(str(path), self.time)
-            self.speech_end = self.time + duration
+            self.renderer.file_writer.add_sound(str(path),
+                                                self.caption_start)
+            # The next caption may start as soon as the last word ends,
+            # rather than the clip's trailing silence.
+            length = Narrator.spoken_length(duration, timings)
+            self.speech_end = self.caption_start + length
             self.narration_log.append(
-                [self.subtitle[0], self.time, duration, 0.0]
+                [self.subtitle[0], self.caption_start, length, 0.0]
             )
         # Where the narration names each of the caption's keys, in order.
         self.key_cues = []
@@ -771,7 +779,7 @@ class SmartBuryIntro(Scene):
         self.play(
             *(FadeOut(m) for m in old),
             *(FadeIn(m, shift=UP * 0.15) for m in shown),
-            run_time=0.5,
+            run_time=CAPTION_FADE,
         )
         self.caption, self.footnote = new, note
         self.footnote_text = footnote
@@ -1253,7 +1261,9 @@ class SmartBuryIntro(Scene):
         )
         tagline = Text(TAGLINE, font_size=30, color=DIM_COLOR)
         VGroup(title, tagline).arrange(DOWN, buff=0.4)
-        self.say(f"{TAGLINE}.", wait=0, visible=False)
+        # "Smart Bury: keep wanted buffers at the top of the …"
+        self.say(f"Smart Bury: {TAGLINE[0].lower()}{TAGLINE[1:]}.", wait=0,
+                 visible=False)
         self.play(Write(title), FadeIn(tagline, shift=UP * 0.2))
         self.wait(2)
         self.close_card()
@@ -1532,7 +1542,7 @@ class SmartBuryIntro(Scene):
         )
         # Each shown briefly as the narration names it: the "initial"
         # marker, under A, at "where a sequence started"; the counter (with
-        # the state panel) just before "how deep it is".  From then on
+        # the state panel) at "how deep it is".  From then on
         # they show only while a sequence is active (`state_animations').
         self.state_visible = True
         self.add(self.state_panel.set_opacity(0))
@@ -1547,7 +1557,7 @@ class SmartBuryIntro(Scene):
         )
         self.wait(0.6)
         self.play(self.initial_marker.animate.set_opacity(0), run_time=0.4)
-        self.cue("how deep", lead=0.3)
+        self.cue("how deep")
         self.play(self.state_panel.animate.set_opacity(1), run_time=0.4)
         self.wait(0.8)
         self.play(self.state_panel.animate.set_opacity(0), run_time=0.4)
