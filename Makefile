@@ -79,7 +79,8 @@ VOICE = am_michael
 
 # Render in INTRO_QUALITY, narrated in VOICE, into
 # demo/smart-bury-intro-INTRO_QUALITY.mp4, with the captions as
-# subtitles in demo/smart-bury-intro-INTRO_QUALITY.srt.
+# subtitles in demo/smart-bury-intro-INTRO_QUALITY.srt and, styled,
+# .ttml.
 INTRO_OUTPUT = demo/media/videos/smart_bury_intro/$(INTRO_QUALITY)/smart-bury-intro
 intro: demo-check $(if $(VOICE),voice-models voice-model-timed)
 	@test -n "$(MANIM_QUALITY_$(INTRO_QUALITY))" || \
@@ -89,6 +90,8 @@ intro: demo-check $(if $(VOICE),voice-models voice-model-timed)
 	  --media_dir media -o smart-bury-intro smart_bury_intro.py SmartBuryIntro
 	cp $(INTRO_OUTPUT).mp4 demo/smart-bury-intro-$(INTRO_QUALITY).mp4
 	cp $(INTRO_OUTPUT).srt demo/smart-bury-intro-$(INTRO_QUALITY).srt
+	cp demo/media/subtitles/smart-bury-intro.ttml \
+	  demo/smart-bury-intro-$(INTRO_QUALITY).ttml
 
 # Per caption, how long its part of the intro lasts without narration,
 # how long its speech in VOICE lasts, and the difference (positive: the

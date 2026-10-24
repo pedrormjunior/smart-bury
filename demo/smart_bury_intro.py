@@ -22,9 +22,11 @@ import math
 import os
 import random
 import re
+from pathlib import Path
 from xml.sax.saxutils import escape
 
 from manim import (
+    config,
     DOWN,
     LEFT,
     PI,
@@ -216,6 +218,39 @@ def subtitle_text(text: str) -> str:
     return re.sub(r"[`{}|~^]", "", text)
 
 
+def ttml_text(text: str) -> str:
+    """TEXT (see `parse_rich') as TTML spans, styled as in the video:
+    keys monospace on the key boxes' gray, {symbols} monospace in the
+    highlight color, |symbols| monospace, ~text~ italic, and buffer names
+    ("A") unquoted in their colors; footnote markers are dropped."""
+    out, i = [], 0
+    mono = 'tts:fontFamily="monospace"'
+    while i < len(text):
+        char = text[i]
+        if char in '`{|"':
+            close = {"`": "`", "{": "}", "|": "|", '"': '"'}[char]
+            end = text.index(close, i + 1)
+            content = escape(text[i + 1 : end])
+            style = {
+                "`": f'{mono} tts:backgroundColor="{ManimColor(KEY_FILL).to_hex()}"',
+                "{": f'{mono} tts:color="{HIGHLIGHT}"',
+                "|": mono,
+                '"': f'tts:color="{COLORS.get(text[i + 1 : end], '#ffffff')}"',
+            }[char]
+            out.append(f"<span {style}>{content}</span>")
+            i = end + 1
+        elif char == "~":
+            italic = text.count("~", 0, i) % 2 == 0
+            out.append('<span tts:fontStyle="italic">' if italic else "</span>")
+            i += 1
+        elif char == "^":
+            i += 1
+        else:
+            out.append(escape(char))
+            i += 1
+    return "".join(out)
+
+
 def glyph_count(text: str) -> int:
     """How many glyphs TEXT renders to: one per non-blank character."""
     return sum(1 for char in text if not char.isspace())
@@ -339,6 +374,8 @@ class SmartBuryIntro(Scene):
         self.narration_log: list[list] = []
         # The caption shown and since when, for its subtitle.
         self.subtitle: tuple[str, float] | None = None
+        # Each caption's markup, start, and end, for `write_ttml'.
+        self.ttml_cues: list[tuple[str, float, float]] = []
 
         sections = [
             ("Title", self.title_card),
@@ -373,6 +410,7 @@ class SmartBuryIntro(Scene):
             self.next_section(name)
             part()
         self.report_narration()
+        self.write_ttml()
 
     # Building blocks
 
@@ -668,6 +706,7 @@ class SmartBuryIntro(Scene):
         self.finish_speech()
         self.end_subtitle()
         self.subtitle = (subtitle_text(text), self.time)
+        self.subtitle_markup = text     # for the TTML subtitles
         # For `cue': what is said, from when, for how long, and when each
         # phoneme is said (with a model reporting durations).
         self.caption_words = spoken(text) if speech is None else speech
@@ -1796,6 +1835,41 @@ class SmartBuryIntro(Scene):
         waited = sum(entry[3] for entry in self.narration_log)
         print(f"The video waited for speech {waited:.1f} s in all.")
 
+    def write_ttml(self) -> None:
+        """Write the captions as TTML subtitles, styled as in the video
+        (see `ttml_text'), into MEDIA_DIR/subtitles/smart-bury-intro.ttml.
+
+        Unlike the SRT subtitles Manim writes, whose markup YouTube
+        ignores, TTML keeps italics, monospace, and colors there (as far
+        as YouTube honors them).
+        """
+
+        def clock(seconds: float) -> str:
+            hours, rest = divmod(seconds, 3600)
+            minutes, rest = divmod(rest, 60)
+            return f"{int(hours):02}:{int(minutes):02}:{rest:06.3f}"
+
+        lines = [
+            '<?xml version="1.0" encoding="utf-8"?>',
+            '<tt xmlns="http://www.w3.org/ns/ttml"',
+            '    xmlns:tts="http://www.w3.org/ns/ttml#styling" xml:lang="en">',
+            "  <head>",
+            "    <styling>",
+            '      <style xml:id="caption" tts:color="#ffffff"'
+            ' tts:fontFamily="proportionalSansSerif" tts:textAlign="center"/>',
+            "    </styling>",
+            "  </head>",
+            '  <body style="caption">',
+            "    <div>",
+        ]
+        for text, start, end in self.ttml_cues:
+            lines.append(f'      <p begin="{clock(start)}" end="{clock(end)}">'
+                         f"{ttml_text(text)}</p>")
+        lines += ["    </div>", "  </body>", "</tt>"]
+        path = Path(config.media_dir) / "subtitles" / "smart-bury-intro.ttml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
     def end_subtitle(self) -> None:
         """End the subtitle of the caption shown, if any, now."""
         if self.subtitle is not None:
@@ -1803,6 +1877,7 @@ class SmartBuryIntro(Scene):
             self.add_subcaption(
                 text, duration=self.time - start, offset=start - self.time
             )
+            self.ttml_cues.append((self.subtitle_markup, start, self.time))
             self.subtitle = None
 
     def outro(self) -> None:

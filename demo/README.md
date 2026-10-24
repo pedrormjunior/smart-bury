@@ -33,7 +33,10 @@ make intro VOICE=                   # silent
 ```
 
 The video lands in `demo/smart-bury-intro-<quality>.mp4`, with the
-captions as subtitles in `demo/smart-bury-intro-<quality>.srt`.  The
+captions as subtitles in `demo/smart-bury-intro-<quality>.srt` (plain
+text) and `demo/smart-bury-intro-<quality>.ttml` (styled as in the
+video: italics, monospace, and colors, which YouTube keeps from TTML,
+unlike SRT; mpv can't read TTML).  The
 render's log ends with, per caption, how long its part lasts without
 narration, how long its speech lasts, and the difference.
 
