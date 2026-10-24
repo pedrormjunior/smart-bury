@@ -421,8 +421,8 @@ class SmartBuryIntro(Scene):
             name: buffer_box(name).move_to(slot_position(index))
             for index, name in enumerate(self.sim.blist)
         }
-        # A copy of each box, outlined in CURRENT_COLOR and opaque, shown
-        # over it, expanding and contracting, as the voice names it.
+        # An opaque copy of each box, in its own colors, shown over it,
+        # expanding and contracting, as the voice names it.
         self.pulses = {}
         for name, box in self.boxes.items():
             fill = ManimColor(BACKGROUND).interpolate(
@@ -433,7 +433,7 @@ class SmartBuryIntro(Scene):
                     corner_radius=0.15,
                     width=1.3,
                     height=0.9,
-                    color=CURRENT_COLOR,
+                    color=COLORS[name],
                     stroke_width=4,
                     fill_color=fill,
                     fill_opacity=1,
