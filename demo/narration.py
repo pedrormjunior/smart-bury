@@ -79,7 +79,7 @@ def spoken_keys(keys: list[str]) -> str:
     before a digit, e.g. ["C-x", "3"] -> "control x plus three"."""
     words = spoken_key(keys[0])
     for key in keys[1:]:
-        words += (" plus " if key.isdigit() else ", ") + spoken_key(key)
+        words += (", " if key.isdigit() else ", ") + spoken_key(key)
     return words
 
 
