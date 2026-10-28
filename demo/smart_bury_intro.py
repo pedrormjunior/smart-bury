@@ -1770,7 +1770,7 @@ class SmartBuryIntro(Scene):
 
     def footnote_text_mobject(self, text: str) -> VGroup:
         """TEXT (see `parse_rich') as a footnote, below the caption."""
-        note = rich_text(text, font_size=20, color=DIM_COLOR)
+        note = rich_text(text, font_size=20, color=WHITE)  # as captions
         return note.move_to(UP * FOOTNOTE_Y)
 
     def caption_time_at(self, index: int) -> float:
