@@ -27,10 +27,16 @@ All `make` commands below run from the repository root.
 ## Rendering the intro
 
 ```
-make intro                          # 480p15, narrated by am_michael
+make intro                          # 480p15, narrated by the VOICE blend
 make intro INTRO_QUALITY=1440p60    # see the Makefile for qualities
+make intro VOICE=am_michael         # one of Kokoro's voices
 make intro VOICE=                   # silent
 ```
+
+The narrator's voice, `VOICE` in the Makefile, is a blend of Kokoro's
+voices, `am_michael:0.7,bm_george:0.3`: the weighted mean of their style
+vectors.  `narration.py --voice` takes the same, to listen to a caption
+first.
 
 The video lands in `demo/smart-bury-intro-<quality>.mp4`, with the
 captions as subtitles in `demo/smart-bury-intro-<quality>.srt` (plain

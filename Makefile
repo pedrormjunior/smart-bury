@@ -73,9 +73,10 @@ MANIM_QUALITY_1080p60 = h
 MANIM_QUALITY_1440p60 = p
 MANIM_QUALITY_2160p60 = k
 
-# Narrator's voice in `make intro' (see demo/narration.py); empty for a
-# silent render: make intro VOICE=
-VOICE = am_michael
+# Narrator's voice in `make intro' (see demo/narration.py): a Kokoro
+# voice or a blend, NAME:WEIGHT,...; empty for a silent render:
+# make intro VOICE=
+VOICE = am_michael:0.7,bm_george:0.3
 
 # Render in INTRO_QUALITY, narrated in VOICE, into
 # demo/smart-bury-intro-INTRO_QUALITY.mp4, with the captions as

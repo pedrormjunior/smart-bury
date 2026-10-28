@@ -10,13 +10,17 @@ smart_bury_intro.py); `spoken' turns it into the words to say.  Clips
 are cached by model, voice, speed, and text, so a render only
 synthesizes the captions that changed.
 
+A voice is one of Kokoro's (e.g. am_michael) or a blend of them,
+"NAME:WEIGHT,NAME:WEIGHT,..." (e.g. am_michael:0.7,bm_george:0.3): the
+weighted mean of their styles, the weights normalized to add up to 1.
+
 Run directly:
 
     python narration.py --samples
         writes voice-samples/VOICE.wav for each candidate voice, a few
         captions each, to pick a voice by ear;
     python narration.py --voice VOICE --out FILE.wav CAPTION
-        writes one caption.
+        writes one caption (VOICE may be a blend).
 """
 
 from __future__ import annotations
@@ -117,6 +121,7 @@ class Narrator:
         self.voice = voice
         self.speed = speed
         self._kokoro = None
+        self._style = None
         self.timed = False      # whether the model reports durations
 
     def kokoro(self):
@@ -126,11 +131,27 @@ class Narrator:
             self.timed = len(self._kokoro.sess.get_outputs()) > 1
         return self._kokoro
 
+    def style(self):
+        """The voice to give Kokoro: VOICE's name, or, for a blend
+        (NAME:WEIGHT,...), the weighted mean of its voices' styles."""
+        if self._style is None:
+            if ":" not in self.voice and "," not in self.voice:
+                self._style = self.voice
+            else:
+                pairs = [(name, float(weight or 1)) for name, _, weight in
+                         (part.partition(":")
+                          for part in self.voice.split(","))]
+                total = sum(weight for _, weight in pairs)
+                self._style = sum(self.kokoro().get_voice_style(name)
+                                  * (weight / total)
+                                  for name, weight in pairs)
+        return self._style
+
     def synthesize_timed(self, words: str) -> tuple[np.ndarray, int, list]:
         """WORDS' audio, its sample rate, and its phoneme timings (none
         without a model reporting durations)."""
         kokoro = self.kokoro()
-        return kokoro.create_timed(words, voice=self.voice, speed=self.speed,
+        return kokoro.create_timed(words, voice=self.style(), speed=self.speed,
                                    lang="en-us", continuous=self.timed,
                                    sentence_pause=SENTENCE_PAUSE,
                                    clause_pause=CLAUSE_PAUSE)
@@ -202,7 +223,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--samples", action="store_true",
                         help="write a sample per candidate voice")
-    parser.add_argument("--voice", default=CANDIDATE_VOICES[0])
+    parser.add_argument("--voice", default=CANDIDATE_VOICES[0],
+                        help="a Kokoro voice or a blend, "
+                        "e.g. am_michael:0.7,bm_george:0.3")
     parser.add_argument("--out", type=Path, default=Path("caption.wav"))
     parser.add_argument("caption", nargs="?")
     args = parser.parse_args()
