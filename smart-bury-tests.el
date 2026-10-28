@@ -16,12 +16,15 @@
 (defmacro smart-bury-test-with-buffers (bindings &rest body)
   "Bind each (VAR NAME) pair in BINDINGS to a fresh buffer named NAME.
 Reset Smart Bury's global state for the duration of BODY, and
-always kill the buffers afterward, even if BODY signals an error."
+always kill the buffers afterward, even if BODY signals an error.
+`window-min-width' is lowered so that BODY can split the window side
+by side even in Emacs 27's 10-column batch frame."
   (declare (indent 1))
   `(let (,@(mapcar (lambda (b) `(,(car b) (generate-new-buffer ,(cadr b))))
                    bindings)
          (smart-bury--counter 1)
-         (smart-bury--initial-buffer nil))
+         (smart-bury--initial-buffer nil)
+         (window-min-width 2))
      (unwind-protect
          (save-window-excursion
            (save-current-buffer
