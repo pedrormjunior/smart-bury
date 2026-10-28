@@ -1583,14 +1583,10 @@ class SmartBuryIntro(Scene):
             'Buffer "A", where the ~sequence~ started, stays the ~other buffer~.',
             expect="EABCD",
         )
-        self.press(
-            "_",
-            self.sim.switch_through,
-            'One more `_` wraps around to "A".',
-            quiet="A",
-            expect="ABCDE",
-            fast=True,
-        )
+        # No key named here: pressed as the narration says "wraps".
+        self.say('Past the last buffer, it wraps around to "A".', wait=0, quiet="A")
+        self.cue("wraps")
+        self.press("_", self.sim.switch_through, expect="ABCDE", fast=True)
         # Typing in A ends this part: the first sequence break.
         self.work(
             "Typing, or any other command, ends the ~sequence~.",
