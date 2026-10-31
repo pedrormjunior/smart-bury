@@ -384,6 +384,56 @@ sequence went on in whatever window the action chose."
         (smart-bury-switch-to-other-buffer))
       (should (eq (current-buffer) a)))))
 
+(defmacro smart-bury-test-on-unrecorded-buffer (a b c d &rest body)
+  "Run BODY on buffer C, reached without recording it.
+Buffers A, B, C, and D are visited so that A is the most recent, then
+`previous-buffer' goes to C, leaving A first in the real `buffer-list'
+although C is current."
+  (declare (indent 4))
+  `(progn
+     (delete-other-windows)
+     (dolist (buffer (list ,d ,c ,b ,a))
+       (switch-to-buffer buffer))
+     (previous-buffer)
+     (previous-buffer)
+     (should (eq (current-buffer) ,c))
+     (should (eq (car (buffer-list)) ,a))
+     ,@body))
+
+(ert-deftest smart-bury-test-switch-through-from-unrecorded-buffer ()
+  "A sequence started on a buffer that `previous-buffer' reached goes
+through the most recent buffers in order.
+
+Regression test: both switch commands take the current buffer to be
+the first of `buffer-list', which `previous-buffer' does not ensure, so
+they dropped the actual first buffer and skipped it.  Needs the real
+`buffer-list'."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c") (d "sb-d"))
+    (smart-bury-test-on-unrecorded-buffer a b c d
+      (let ((last-command 'some-other-command))
+        (smart-bury-switch-through-buffers))
+      (should (eq (current-buffer) a))
+      (let ((last-command 'smart-bury-switch-through-buffers))
+        (smart-bury-switch-through-buffers))
+      (should (eq (current-buffer) b))
+      (let ((last-command 'smart-bury-switch-through-buffers))
+        (smart-bury-switch-to-other-buffer))
+      (should (eq (current-buffer) c)))))
+
+(ert-deftest smart-bury-test-switch-to-other-from-unrecorded-buffer ()
+  "On a buffer that `previous-buffer' reached,
+`smart-bury-switch-to-other-buffer' alternates with the most recent
+buffer, the same one `other-buffer' gives.  See
+`smart-bury-test-switch-through-from-unrecorded-buffer'."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c") (d "sb-d"))
+    (smart-bury-test-on-unrecorded-buffer a b c d
+      (let ((last-command 'some-other-command))
+        (smart-bury-switch-to-other-buffer))
+      (should (eq (current-buffer) a))
+      (let ((last-command 'smart-bury-switch-to-other-buffer))
+        (smart-bury-switch-to-other-buffer))
+      (should (eq (current-buffer) c)))))
+
 (ert-deftest smart-bury-test-switch-to-other-buffer-alternates-back-and-forth ()
   "A fresh call to `smart-bury-switch-to-other-buffer' switches to the
 \"other\" buffer; calling it again (continuing the sequence) switches

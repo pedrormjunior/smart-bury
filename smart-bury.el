@@ -143,6 +143,14 @@ When `smart-bury-same-frame' is non-nil, the buffer list is in the scope
 of the current frame."
   (buffer-list (when smart-bury-same-frame (selected-frame))))
 
+(defun smart-bury--other-buffers nil
+  "Return the buffers other than the current one, most recent first.
+Commands like `previous-buffer' change the window's buffer without
+recording it, leaving the current buffer anywhere in the list, so
+record it first: a sequence relies on the current buffer being first."
+  (select-window (selected-window))
+  (cdr (smart-bury--buffer-list)))
+
 (defun smart-bury--starts-now-p nil
   "Check if `last-command' was *not* one of the Smart Bury ones.
 The Smart Bury commands are stored in `smart-bury--commands'."
@@ -285,7 +293,7 @@ the buffers on the way."
   (when (smart-bury--maybe-restart-sequence)
     (setq smart-bury--counter 1))
   (smart-bury--switch-to-buffer
-   (smart-bury--go-through-buffers (cdr (smart-bury--buffer-list))))
+   (smart-bury--go-through-buffers (smart-bury--other-buffers)))
   (setq smart-bury--counter (1+ smart-bury--counter))
   (smart-bury--report "%s" (smart-bury--position smart-bury--counter)))
 
@@ -303,7 +311,7 @@ repeatedly therefore alternates back and forth between the two."
             2
           (max 2 smart-bury--counter)))
   (smart-bury--walk-back
-   (smart-bury--select-buffers (cdr (smart-bury--buffer-list))
+   (smart-bury--select-buffers (smart-bury--other-buffers)
                                (1- smart-bury--counter)))
   (setq smart-bury--counter 2)
   (smart-bury--report "%s" (smart-bury--position
