@@ -224,9 +224,15 @@ def subtitle_text(text: str) -> str:
 
 def ttml_text(text: str) -> str:
     """TEXT (see `parse_rich') as TTML spans, styled as in the video:
-    keys monospace on the key boxes' gray, {symbols} monospace in the
-    highlight color, |symbols| monospace, ~text~ italic, and buffer names
-    ("A") unquoted in their colors; footnote markers are dropped."""
+    keys monospace on the key boxes' gray, in their outline's color,
+    {symbols} monospace in the highlight color, |symbols| monospace,
+    ~text~ italic, and buffer names ("A") unquoted in their colors;
+    footnote markers are dropped.
+
+    YouTube honors the colors, but ignores fonts and backgrounds (tested
+    with every generic font family and a few named ones, on spans and
+    whole lines), which is why keys get a color of their own.
+    """
     out, i = [], 0
     mono = 'tts:fontFamily="monospace"'
     while i < len(text):
@@ -236,7 +242,8 @@ def ttml_text(text: str) -> str:
             end = text.index(close, i + 1)
             content = escape(text[i + 1 : end])
             style = {
-                "`": f'{mono} tts:backgroundColor="{ManimColor(KEY_FILL).to_hex()}"',
+                "`": f'{mono} tts:color="{KEY_STROKE}"'
+                f' tts:backgroundColor="{ManimColor(KEY_FILL).to_hex()}"',
                 "{": f'{mono} tts:color="{HIGHLIGHT}"',
                 "|": mono,
                 '"': f'tts:color="{COLORS.get(text[i + 1 : end], '#ffffff')}"',
@@ -1850,8 +1857,7 @@ class SmartBuryIntro(Scene):
         (see `ttml_text'), into MEDIA_DIR/subtitles/smart-bury-intro.ttml.
 
         Unlike the SRT subtitles Manim writes, whose markup YouTube
-        ignores, TTML keeps italics, monospace, and colors there (as far
-        as YouTube honors them).
+        ignores, TTML keeps colors there (see `ttml_text').
         """
 
         def clock(seconds: float) -> str:
