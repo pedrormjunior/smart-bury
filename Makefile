@@ -78,10 +78,16 @@ MANIM_QUALITY_2160p60 = k
 # make intro VOICE=
 VOICE = am_michael:0.7,bm_george:0.3
 
+# Loudness of the narrated video, in LUFS: about what YouTube aims for.
+# YouTube turns louder videos down, but doesn't turn quieter ones up, and
+# Kokoro's voice comes out around -26.
+INTRO_LOUDNESS = -14
+
 # Render in INTRO_QUALITY, narrated in VOICE, into
 # demo/smart-bury-intro-INTRO_QUALITY.mp4, with the captions as
 # subtitles in demo/smart-bury-intro-INTRO_QUALITY.srt and, styled,
-# .ttml.
+# .ttml.  The narration is raised to INTRO_LOUDNESS with ffmpeg, the
+# video stream being copied as is.
 INTRO_OUTPUT = demo/media/videos/smart_bury_intro/$(INTRO_QUALITY)/smart-bury-intro
 intro: demo-check $(if $(VOICE),voice-models voice-model-timed)
 	@test -n "$(MANIM_QUALITY_$(INTRO_QUALITY))" || \
@@ -89,7 +95,11 @@ intro: demo-check $(if $(VOICE),voice-models voice-model-timed)
 	cd demo && SMART_BURY_VOICE=$(VOICE) \
 	  uv run manim -q$(MANIM_QUALITY_$(INTRO_QUALITY)) \
 	  --media_dir media -o smart-bury-intro smart_bury_intro.py SmartBuryIntro
-	cp $(INTRO_OUTPUT).mp4 demo/smart-bury-intro-$(INTRO_QUALITY).mp4
+	$(if $(VOICE),ffmpeg -y -loglevel error -i $(INTRO_OUTPUT).mp4 -c:v copy \
+	  -af loudnorm=I=$(INTRO_LOUDNESS):TP=-1:LRA=11 -ar 48000 \
+	  -c:a aac -b:a 192k -movflags +faststart \
+	  demo/smart-bury-intro-$(INTRO_QUALITY).mp4,\
+	  cp $(INTRO_OUTPUT).mp4 demo/smart-bury-intro-$(INTRO_QUALITY).mp4)
 	cp $(INTRO_OUTPUT).srt demo/smart-bury-intro-$(INTRO_QUALITY).srt
 	cp demo/media/subtitles/smart-bury-intro.ttml \
 	  demo/smart-bury-intro-$(INTRO_QUALITY).ttml

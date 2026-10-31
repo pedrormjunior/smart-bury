@@ -19,7 +19,8 @@ All `make` commands below run from the repository root.
 
 - [`uv`](https://docs.astral.sh/uv/), which installs the Python versions
   and the packages needed (Python 3.13 here, 3.12 for the model export);
-- `make`, `curl`, `sha256sum`, and `ffmpeg` (for Manim);
+- `make`, `curl`, `sha256sum`, and `ffmpeg` (for Manim and the
+  narration's loudness);
 - about 2 GB of free disk space, mostly for the model export's PyTorch;
 - a network connection for the first build only (see below); after
   that, everything runs offline.
@@ -43,7 +44,9 @@ captions as subtitles in `demo/smart-bury-intro-<quality>.srt` (plain
 text) and `demo/smart-bury-intro-<quality>.ttml` (styled as in the
 video: italics, monospace, and colors; YouTube keeps the colors from
 TTML, unlike SRT, but ignores fonts and backgrounds, so keys also get a
-color of their own; mpv can't read TTML).  The
+color of their own; mpv can't read TTML).  A narrated video has its audio raised
+with ffmpeg to `INTRO_LOUDNESS` in the Makefile, -14 LUFS, about what
+YouTube aims for, its video stream copied as is.  The
 render's log ends with, per caption, how long its part lasts without
 narration, how long its speech lasts, and the difference.
 
