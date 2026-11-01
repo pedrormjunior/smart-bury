@@ -1,0 +1,11 @@
+/.venv/
+/media/
+/voice-models/
+/voice-samples/
+/kokoro-export/.venv/
+/kokoro-export/export.py
+__pycache__/
+/smart-bury-intro-*.mp4
+/smart-bury-intro-*.srt
+/smart-bury-intro-*.ttml
+/smart-bury-intro-*.png
