@@ -44,7 +44,10 @@ captions as subtitles in `demo/smart-bury-intro-<quality>.srt` (plain
 text) and `demo/smart-bury-intro-<quality>.ttml` (styled as in the
 video: italics, monospace, and colors; YouTube keeps the colors from
 TTML, unlike SRT, but ignores fonts and backgrounds, so keys also get a
-color of their own; mpv can't read TTML).  A narrated video has its audio raised
+color of their own; mpv can't read TTML).  Next to them are their
+translations from `demo/translations.py`, in Brazilian Portuguese,
+Spanish, and Italian, e.g. `demo/smart-bury-intro-<quality>.pt-BR.ttml`
+and `.pt-BR.srt`, with the English timing.  A narrated video has its audio raised
 with ffmpeg to `INTRO_LOUDNESS` in the Makefile, -14 LUFS, about what
 YouTube aims for, its video stream copied as is.  The
 render's log ends with, per caption, how long its part lasts without

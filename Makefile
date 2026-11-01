@@ -42,6 +42,7 @@ package-lint:
 # Python model of the algorithm that drives the animation.
 demo-check:
 	cd demo && uv run python smart_bury_sim.py
+	cd demo && uv run python translations.py
 
 # Fast, low-quality render (480p15) into
 # demo/smart-bury-demo-preview.mp4.
@@ -91,8 +92,10 @@ INTRO_LOUDNESS = -14
 # Render in INTRO_QUALITY, narrated in VOICE, into
 # demo/smart-bury-intro-INTRO_QUALITY.mp4, with the captions as
 # subtitles in demo/smart-bury-intro-INTRO_QUALITY.srt and, styled,
-# .ttml.  The narration is raised to INTRO_LOUDNESS with ffmpeg, the
-# video stream being copied as is.
+# .ttml, and their translations (demo/translations.py) next to them,
+# e.g. demo/smart-bury-intro-INTRO_QUALITY.pt-BR.ttml.  The narration
+# is raised to INTRO_LOUDNESS with ffmpeg, the video stream being
+# copied as is.
 INTRO_OUTPUT = demo/media/videos/smart_bury_intro/$(INTRO_QUALITY)/smart-bury-intro
 intro: demo-check $(if $(VOICE),voice-models voice-model-timed)
 	@test -n "$(MANIM_QUALITY_$(INTRO_QUALITY))" || \
@@ -106,8 +109,9 @@ intro: demo-check $(if $(VOICE),voice-models voice-model-timed)
 	  demo/smart-bury-intro-$(INTRO_QUALITY).mp4,\
 	  cp $(INTRO_OUTPUT).mp4 demo/smart-bury-intro-$(INTRO_QUALITY).mp4)
 	cp $(INTRO_OUTPUT).srt demo/smart-bury-intro-$(INTRO_QUALITY).srt
-	cp demo/media/subtitles/smart-bury-intro.ttml \
-	  demo/smart-bury-intro-$(INTRO_QUALITY).ttml
+	for file in demo/media/subtitles/smart-bury-intro*; do \
+	  cp $$file demo/smart-bury-intro-$(INTRO_QUALITY)$${file##*smart-bury-intro}; \
+	done
 
 # A frame of demo/smart-bury-intro-INTRO_QUALITY.mp4, already
 # rendered, as a thumbnail for YouTube, which recommends 1280x720, in

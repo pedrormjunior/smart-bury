@@ -60,6 +60,7 @@ from manim import (
 
 from narration import Narrator, spoken, spoken_key
 from smart_bury_sim import REPEATABLE_COMMANDS, SMART_COMMANDS, SmartBury
+from translations import LANGUAGES, translated
 
 TEXT_FONT = "Sans"
 MONO = "Monospace"
@@ -426,6 +427,7 @@ class SmartBuryIntro(Scene):
             part()
         self.report_narration()
         self.write_ttml()
+        self.write_srt()
 
     # Building blocks
 
@@ -1898,7 +1900,8 @@ class SmartBuryIntro(Scene):
 
     def write_ttml(self) -> None:
         """Write the captions as TTML subtitles, styled as in the video (see
-        `ttml_text'), into MEDIA_DIR/subtitles/smart-bury-intro.ttml.
+        `ttml_text'), into MEDIA_DIR/subtitles/smart-bury-intro.ttml, and
+        their translations into smart-bury-intro.LANGUAGE.ttml there.
 
         Unlike the SRT subtitles Manim writes, whose markup YouTube ignores,
         TTML keeps colors there (see `ttml_text').
@@ -1910,27 +1913,60 @@ class SmartBuryIntro(Scene):
             minutes, rest = divmod(rest, 60)
             return f"{int(hours):02}:{int(minutes):02}:{rest:06.3f}"
 
-        lines = [
-            '<?xml version="1.0" encoding="utf-8"?>',
-            '<tt xmlns="http://www.w3.org/ns/ttml"',
-            '    xmlns:tts="http://www.w3.org/ns/ttml#styling" xml:lang="en">',
-            "  <head>",
-            "    <styling>",
-            '      <style xml:id="caption" tts:color="#ffffff"'
-            ' tts:fontFamily="proportionalSansSerif" tts:textAlign="center"/>',
-            "    </styling>",
-            "  </head>",
-            '  <body style="caption">',
-            "    <div>",
-        ]
-        for text, start, end in self.ttml_cues:
-            lines.append(
-                f'      <p begin="{clock(start)}" end="{clock(end)}">'
-                f"{ttml_text(text)}</p>"
-            )
-        lines += ["    </div>", "  </body>", "</tt>"]
-        path = Path(config.media_dir) / "subtitles" / "smart-bury-intro.ttml"
-        path.parent.mkdir(parents=True, exist_ok=True)
+        for language in ("en", *LANGUAGES):
+            lines = [
+                '<?xml version="1.0" encoding="utf-8"?>',
+                '<tt xmlns="http://www.w3.org/ns/ttml"',
+                '    xmlns:tts="http://www.w3.org/ns/ttml#styling"'
+                f' xml:lang="{language}">',
+                "  <head>",
+                "    <styling>",
+                '      <style xml:id="caption" tts:color="#ffffff"'
+                ' tts:fontFamily="proportionalSansSerif"'
+                ' tts:textAlign="center"/>',
+                "    </styling>",
+                "  </head>",
+                '  <body style="caption">',
+                "    <div>",
+            ]
+            for text, start, end in self.ttml_cues:
+                markup = ttml_text(translated(text, language))
+                lines.append(
+                    f'      <p begin="{clock(start)}" end="{clock(end)}">'
+                    f"{markup}</p>"
+                )
+            lines += ["    </div>", "  </body>", "</tt>"]
+            suffix = "" if language == "en" else f".{language}"
+            self.write_subtitle_file(f"{suffix}.ttml", lines)
+
+    def write_srt(self) -> None:
+        """Write the captions' translations as plain SRT subtitles, into
+        MEDIA_DIR/subtitles/smart-bury-intro.LANGUAGE.srt.  The English
+        ones are Manim's (see `end_subtitle')."""
+
+        def clock(seconds: float) -> str:
+            millis = round(seconds * 1000)
+            hours, millis = divmod(millis, 3_600_000)
+            minutes, millis = divmod(millis, 60_000)
+            seconds, millis = divmod(millis, 1000)
+            return f"{hours:02}:{minutes:02}:{seconds:02},{millis:03}"
+
+        for language in LANGUAGES:
+            lines = []
+            for index, (text, start, end) in enumerate(self.ttml_cues, 1):
+                lines += [
+                    str(index),
+                    f"{clock(start)} --> {clock(end)}",
+                    subtitle_text(translated(text, language)),
+                    "",
+                ]
+            self.write_subtitle_file(f".{language}.srt", lines[:-1])
+
+    def write_subtitle_file(self, suffix: str, lines: list[str]) -> None:
+        """Write LINES into MEDIA_DIR/subtitles/smart-bury-introSUFFIX."""
+        path = Path(config.media_dir) / "subtitles"
+        path.mkdir(parents=True, exist_ok=True)
+        path /= f"smart-bury-intro{suffix}"
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def end_subtitle(self) -> None:
