@@ -1,4 +1,8 @@
-.PHONY: test compile checkdoc package-lint demo-check demo-preview demo intro-check intro intro-part intro-narration voice-models voice-model-timed voice-model-check voice-model-clean voice-samples test-interactively test-emacs-defaults-interactively
+.PHONY: test compile checkdoc package-lint demo-check demo-preview	\
+	demo intro-check intro intro-part intro-thumbnail		\
+	intro-narration voice-models voice-model-timed			\
+	voice-model-check voice-model-clean voice-samples		\
+	test-interactively test-emacs-defaults-interactively
 
 test:
 	emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el \
@@ -103,6 +107,20 @@ intro: demo-check $(if $(VOICE),voice-models voice-model-timed)
 	cp $(INTRO_OUTPUT).srt demo/smart-bury-intro-$(INTRO_QUALITY).srt
 	cp demo/media/subtitles/smart-bury-intro.ttml \
 	  demo/smart-bury-intro-$(INTRO_QUALITY).ttml
+
+# A frame of demo/smart-bury-intro-INTRO_QUALITY.mp4, already
+# rendered, as a thumbnail for YouTube, which recommends 1280x720, in
+# demo/smart-bury-intro-thumbnail.png.  THUMBNAIL_TIME, in ffmpeg's
+# MM:SS, is the "smart" bury: the buffer boxes tell more about the
+# video than the title card, whose text the video's title would just
+# repeat.
+THUMBNAIL_TIME = 2:23
+intro-thumbnail:
+	@test -f demo/smart-bury-intro-$(INTRO_QUALITY).mp4 || \
+	  { echo "no $(INTRO_QUALITY) render: run make intro first"; exit 1; }
+	ffmpeg -y -loglevel error -ss $(THUMBNAIL_TIME) \
+	  -i demo/smart-bury-intro-$(INTRO_QUALITY).mp4 -frames:v 1 \
+	  -vf scale=1280:720 demo/smart-bury-intro-thumbnail.png
 
 # Per caption, how long its part of the intro lasts without narration,
 # how long its speech in VOICE lasts, and the difference (positive: the
