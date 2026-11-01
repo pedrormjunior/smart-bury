@@ -12,3 +12,6 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[tool.black]
+line-length = 79
