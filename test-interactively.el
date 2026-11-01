@@ -6,10 +6,10 @@
 
 ;; This file is maintained by AI.
 
-;; This program is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or (at
-;; your option) any later version.
+;; This program is free software: you can redistribute it and/or
+;; modify it under the terms of the GNU General Public License as
+;; published by the Free Software Foundation, either version 3 of the
+;; License, or (at your option) any later version.
 
 ;; This program is distributed in the hope that it will be useful, but
 ;; WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -34,9 +34,10 @@
 ;; - when `smart-bury-test-demo-stale-entry' is non-nil (the default),
 ;;   customizes Smart Bury's options as a saved custom-file would,
 ;;   including a stale/undefined entry in both
-;;   `smart-bury-wrapped-commands' and `smart-bury-repeatable-commands',
-;;   to confirm it is accepted without a warning or breaking anything,
-;;   its wrapper only signaling a `user-error' when called (see `M-x
+;;   `smart-bury-wrapped-commands' and
+;;   `smart-bury-repeatable-commands', to confirm it is accepted
+;;   without a warning or breaking anything, its wrapper only
+;;   signaling a `user-error' when called (see `M-x
 ;;   view-echo-area-messages' after startup).
 
 ;;; Code:
@@ -44,8 +45,8 @@
 (defvar smart-bury-test-demo-stale-entry t
   "Non-nil means customize Smart Bury's options on startup.
 The customization includes a stale/undefined entry in
-`smart-bury-wrapped-commands' and `smart-bury-repeatable-commands'
-\(see below).")
+`smart-bury-wrapped-commands' and `smart-bury-repeatable-commands' \(see
+below).")
 
 (load-theme 'modus-vivendi t)
 
@@ -58,13 +59,14 @@ The customization includes a stale/undefined entry in
   (generate-new-buffer (format "test-buffer-%d" (1+ i))))
 
 (when smart-bury-test-demo-stale-entry
-  ;; Both command lists name `a-command-that-does-not-exist', simulating
-  ;; a stale saved Customize value referring to a since-renamed/removed
-  ;; command, as would happen if a custom-file set them before an
-  ;; upgrade dropped one of the commands they name.  This should neither
-  ;; warn nor error, and still leave `quit-window'/`kill-current-buffer'
-  ;; wrapped normally.  `M-x smart-bury-a-command-that-does-not-exist'
-  ;; then signals a `user-error'.
+  ;; Both command lists name `a-command-that-does-not-exist',
+  ;; simulating a stale saved Customize value referring to a
+  ;; since-renamed/removed command, as would happen if a custom-file
+  ;; set them before an upgrade dropped one of the commands they name.
+  ;; This should neither warn nor error, and still leave
+  ;; `quit-window'/`kill-current-buffer' wrapped normally.  `M-x
+  ;; smart-bury-a-command-that-does-not-exist' then signals a
+  ;; `user-error'.
   (custom-set-variables
    ;; The default, set here to be flipped: non-nil also goes through
    ;; buffers shown in other windows.

@@ -43,7 +43,8 @@ package-lint:
 demo-check:
 	cd demo && uv run python smart_bury_sim.py
 
-# Fast, low-quality render (480p15) into demo/smart-bury-demo-preview.mp4.
+# Fast, low-quality render (480p15) into
+# demo/smart-bury-demo-preview.mp4.
 demo-preview: demo-check
 	cd demo && uv run manim -ql --media_dir media \
 	  -o smart-bury-demo-preview smart_bury_demo.py SmartBuryDemo
@@ -55,8 +56,8 @@ demo: demo-check
 	  -o smart-bury-demo smart_bury_demo.py SmartBuryDemo
 	cp demo/media/videos/smart_bury_demo/1080p60/smart-bury-demo.mp4 demo/
 
-# The short introduction (demo/smart_bury_intro.py).  intro-check runs the
-# scene without rendering, which asserts every storyboard step's
+# The short introduction (demo/smart_bury_intro.py).  intro-check runs
+# the scene without rendering, which asserts every storyboard step's
 # expected buffer order against the model.
 intro-check: demo-check
 	cd demo && uv run manim --dry_run smart_bury_intro.py SmartBuryIntro
@@ -78,13 +79,13 @@ MANIM_QUALITY_1440p60 = p
 MANIM_QUALITY_2160p60 = k
 
 # Narrator's voice in `make intro' (see demo/narration.py): a Kokoro
-# voice or a blend, NAME:WEIGHT,...; empty for a silent render:
-# make intro VOICE=
+# voice or a blend, NAME:WEIGHT,...; empty for a silent render: make
+# intro VOICE=
 VOICE = am_michael:0.7,bm_george:0.3
 
-# Loudness of the narrated video, in LUFS: about what YouTube aims for.
-# YouTube turns louder videos down, but doesn't turn quieter ones up, and
-# Kokoro's voice comes out around -26.
+# Loudness of the narrated video, in LUFS: about what YouTube aims
+# for.  YouTube turns louder videos down, but doesn't turn quieter
+# ones up, and Kokoro's voice comes out around -26.
 INTRO_LOUDNESS = -14
 
 # Render in INTRO_QUALITY, narrated in VOICE, into
@@ -123,9 +124,9 @@ intro-thumbnail:
 	  -vf scale=1280:720 demo/smart-bury-intro-thumbnail.png
 
 # Per caption, how long its part of the intro lasts without narration,
-# how long its speech in VOICE lasts, and the difference (positive: the
-# video waits that long for the speech).  A dry run, synthesizing only
-# new or changed captions; narrated renders print the same table.
+# how long its speech in VOICE lasts, and the difference (positive:
+# the video waits that long for the speech).  A dry run, synthesizing
+# only new or changed captions; narrated renders print the same table.
 intro-narration: demo-check voice-models
 	@test -n "$(VOICE)" || { echo "intro-narration needs a VOICE"; exit 1; }
 	cd demo && SMART_BURY_VOICE=$(VOICE) uv run manim --dry_run \
@@ -134,9 +135,9 @@ intro-narration: demo-check voice-models
 	@tr '\r' '\n' < demo/media/intro-narration.log | \
 	  sed -n '/^ #  scene/,/in all\.$$/p'
 
-# Fast render of a range of the intro's animations, for iterating on one
-# part: make intro-part N=120,180 (animation indexes, as in Manim's log)
-# writes demo/smart-bury-intro-part.mp4.
+# Fast render of a range of the intro's animations, for iterating on
+# one part: make intro-part N=120,180 (animation indexes, as in
+# Manim's log) writes demo/smart-bury-intro-part.mp4.
 intro-part:
 	@test -n "$(N)" || { echo "usage: make intro-part N=START,END"; exit 1; }
 	cd demo && uv run manim -ql --media_dir media -n $(N) \
@@ -156,10 +157,10 @@ demo/voice-models/%:
 	mkdir -p demo/voice-models
 	curl -fL -o $@.part $(VOICE_MODELS_URL)/$* && mv $@.part $@
 
-# Kokoro v1.0 exported with a durations output, for continuous synthesis
-# and phoneme timings: demo/kokoro-export/build.sh downloads the export
-# script and the original weights, exports, and checks the result (see
-# demo/README.md).
+# Kokoro v1.0 exported with a durations output, for continuous
+# synthesis and phoneme timings: demo/kokoro-export/build.sh downloads
+# the export script and the original weights, exports, and checks the
+# result (see demo/README.md).
 VOICE_MODEL_TIMED = demo/voice-models/kokoro-v1.0-timed.onnx
 
 voice-model-timed: $(VOICE_MODEL_TIMED)
@@ -170,7 +171,8 @@ $(VOICE_MODEL_TIMED): demo/voice-models/voices-v1.0.bin
 voice-model-check: $(VOICE_MODEL_TIMED)
 	cd demo && uv run python kokoro-export/check.py
 
-# What voice-model-timed builds, removed to build it again from scratch.
+# What voice-model-timed builds, removed to build it again from
+# scratch.
 voice-model-clean:
 	rm -rf demo/voice-models/checkpoints demo/kokoro-export/export.py \
 	  demo/kokoro-export/.venv $(VOICE_MODEL_TIMED)

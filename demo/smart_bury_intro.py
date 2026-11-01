@@ -1,19 +1,19 @@
 """Short introduction to Smart Bury, rendered with Manim Community Edition.
 
-After title cards for the three basic commands and the wrapped ones, a
-single session with five buffers shows the mechanism: an Emacs frame
-(window, mode line, minibuffer) at the top, split in two at the end, the
-"list of all buffers" below it (with the current and the other buffer
-marked), the keys pressed and Smart Bury's state on the right, and
-captions at the bottom.
+After title cards for the three basic commands and the wrapped ones, a single
+session with five buffers shows the mechanism: an Emacs frame (window, mode
+line, minibuffer) at the top, split in two at the end, the "list of all
+buffers" below it (with the current and the other buffer marked), the keys
+pressed and Smart Bury's state on the right, and captions at the bottom.
 
-Every buffer order shown comes from the model in smart_bury_sim.py, and
-each storyboard step asserts the order it expects (see `expect'), so
-`make intro-check' validates the storyboard without rendering.
+Every buffer order shown comes from the model in smart_bury_sim.py, and each
+storyboard step asserts the order it expects (see `expect'), so `make
+intro-check' validates the storyboard without rendering.
 
-Render with `make intro' from the repository root (see the Makefile for
-its quality and narration voice).  The longer, case-by-case animation is
+Render with `make intro' from the repository root (see the Makefile for its
+quality and narration voice).  The longer, case-by-case animation is
 smart_bury_demo.py.
+
 """
 
 from __future__ import annotations
@@ -66,8 +66,8 @@ MONO = "Monospace"
 Text.set_default(font=TEXT_FONT, color="#ebdbb2")
 
 BUFFERS = ["A", "B", "C", "D", "E"]
-# Rainbow colors, so the list's order is easy to follow (the long demo
-# keeps its own palette).
+# Rainbow colors, so the list's order is easy to follow (the long demo keeps
+# its own palette).
 COLORS = {
     "A": "#e8475f",  # red
     "B": "#f5893b",  # orange
@@ -76,12 +76,12 @@ COLORS = {
     "E": "#b07ce8",  # violet (not blue, to stay apart from CURRENT_COLOR)
 }
 CURRENT_COLOR = "#00bfff"
-# The keys repeat-mode offers after a Smart Bury command, in the order its
-# real message lists them, which follows `smart-bury-keys' (switch
-# through, switch to the other buffer, bury).
+# The keys repeat-mode offers after a Smart Bury command, in the order its real
+# message lists them, which follows `smart-bury-keys' (switch through, switch
+# to the other buffer, bury).
 REPEAT_KEYS = ["_", "M-_", "M--"]
-# Commands after which repeat-mode's map is active: the Smart Bury ones,
-# and those in `smart-bury-repeatable-commands'.
+# Commands after which repeat-mode's map is active: the Smart Bury ones, and
+# those in `smart-bury-repeatable-commands'.
 ARMING_COMMANDS = SMART_COMMANDS | REPEATABLE_COMMANDS
 INITIAL_COLOR = CURRENT_COLOR  # "initial" marker and counter
 TITLE_COLOR = CURRENT_COLOR  # "Smart Bury" at the start and the end
@@ -151,14 +151,13 @@ def minibuffer_y() -> float:
 def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
     """Parse TEXT's markup into plain text, Pango markup, and key spans.
 
-    `KEYS` is a key (or key sequence) drawn in a monospace key box,
-    ~TEXT~ is italic, {SYMBOL} is a monospace symbol in the highlight
-    color, |SYMBOL| one in the text's color, and ^ a footnote marker,
-    an asterisk in the highlight color.  "NAME" is a buffer's name,
-    shown without the
-    quotes in the buffer's color, as its box in the list (narration keeps
-    the quotes; see `spoken').  The key spans are (start, end) offsets
-    into the plain text.
+    `KEYS` is a key (or key sequence) drawn in a monospace key box, ~TEXT~ is
+    italic, {SYMBOL} is a monospace symbol in the highlight color, |SYMBOL| one
+    in the text's color, and ^ a footnote marker, an asterisk in the highlight
+    color.  "NAME" is a buffer's name, shown without the quotes in the buffer's
+    color, as its box in the list (narration keeps the quotes; see `spoken').
+    The key spans are (start, end) offsets into the plain text.
+
     """
     plain, markup, keys = "", "", []
     italic = False
@@ -215,23 +214,25 @@ def parse_rich(text: str) -> tuple[str, str, list[tuple[int, int]]]:
 
 def subtitle_text(text: str) -> str:
     """TEXT (see `parse_rich') as a plain subtitle: its markup removed,
-    footnote markers included, except the quotes around buffer names
-    ("A"), kept as in the narration, and keys quoted, as their boxes in
-    the video ("C-x _")."""
+    footnote markers included, except the quotes around buffer names ("A"),
+    kept as in the narration, and keys quoted, as their boxes in the video
+    ("C-x _").
+
+    """
     text = re.sub(r"`([^`]*)`", r'"\1"', text)
     return re.sub(r"[{}|~^]", "", text)
 
 
 def ttml_text(text: str) -> str:
-    """TEXT (see `parse_rich') as TTML spans, styled as in the video:
-    keys monospace on the key boxes' gray, in their outline's color,
-    {symbols} monospace in the highlight color, |symbols| monospace,
-    ~text~ italic, and buffer names ("A") unquoted in their colors;
-    footnote markers are dropped.
+    """TEXT (see `parse_rich') as TTML spans, styled as in the video: keys
+    monospace on the key boxes' gray, in their outline's color, {symbols}
+    monospace in the highlight color, |symbols| monospace, ~text~ italic, and
+    buffer names ("A") unquoted in their colors; footnote markers are dropped.
 
-    YouTube honors the colors, but ignores fonts and backgrounds (tested
-    with every generic font family and a few named ones, on spans and
-    whole lines), which is why keys get a color of their own.
+    YouTube honors the colors, but ignores fonts and backgrounds (tested with
+    every generic font family and a few named ones, on spans and whole lines),
+    which is why keys get a color of their own.
+
     """
     out, i = [], 0
     mono = 'tts:fontFamily="monospace"'
@@ -252,7 +253,9 @@ def ttml_text(text: str) -> str:
             i = end + 1
         elif char == "~":
             italic = text.count("~", 0, i) % 2 == 0
-            out.append('<span tts:fontStyle="italic">' if italic else "</span>")
+            out.append(
+                '<span tts:fontStyle="italic">' if italic else "</span>"
+            )
             i += 1
         elif char == "^":
             i += 1
@@ -272,16 +275,17 @@ def rich_text(
 ) -> VGroup:
     """Render TEXT (see `parse_rich') as one line: VGroup(boxes, glyphs).
 
-    The text is rendered after an "M" strut, which gives the line's
-    baseline and cap height, so every key box spans the same height, with
-    equal padding above the caps and below the baseline, and keys keep
-    their baseline: a lone `_' isn't centered like a dash.  Underscores
-    in keys are raised onto the baseline.  The strut is then dropped.  Ligatures
-    are off, so each character maps to exactly one glyph.
+    The text is rendered after an "M" strut, which gives the line's baseline
+    and cap height, so every key box spans the same height, with equal padding
+    above the caps and below the baseline, and keys keep their baseline: a lone
+    `_' isn't centered like a dash.  Underscores in keys are raised onto the
+    baseline.  The strut is then dropped.  Ligatures are off, so each character
+    maps to exactly one glyph.
 
     Glyphs are shifted to make KEY_ROOM on each side of every key, so
-    neighboring text stays clear of its box.  (A space character can't
-    do this: in a monospace font every space is a full cell wide.)
+    neighboring text stays clear of its box.  (A space character can't do this:
+    in a monospace font every space is a full cell wide.)
+
     """
     color = DIM_COLOR if color is None else color
     plain, markup, keys = parse_rich(text)
@@ -311,8 +315,8 @@ def rich_text(
             glyph.shift(RIGHT * KEY_ROOM)
         for glyph in rendered[last:]:
             glyph.shift(RIGHT * KEY_ROOM)
-    # Underscores in keys sit on the baseline, like the other letters,
-    # rather than below it.
+    # Underscores in keys sit on the baseline, like the other letters, rather
+    # than below it.
     chars = [char for char in plain if not char.isspace()]
     for first, last in spans:
         for index in range(first, last):
@@ -368,20 +372,20 @@ class SmartBuryIntro(Scene):
         self.footnote: VGroup | None = None
         self.footnote_text: str | None = None
         self.state_visible = False
-        # Narration, only with a voice in SMART_BURY_VOICE (see
-        # narration.py): each caption is spoken from when it appears.
+        # Narration, only with a voice in SMART_BURY_VOICE (see narration.py):
+        # each caption is spoken from when it appears.
         voice = os.environ.get("SMART_BURY_VOICE")
         self.narrator = Narrator(voice) if voice else None
         self.speech_end = 0.0  # when the last clip ends
-        # The keys the current caption names, each with where the
-        # narration says it (see `land'), and when each buffer's box
-        # pulses, its name said (see `pulse_updater').
+        # The keys the current caption names, each with where the narration
+        # says it (see `land'), and when each buffer's box pulses, its name
+        # said (see `pulse_updater').
         self.key_cues: list[tuple[str, int]] = []
         self.highlights: dict[str, list[float]] = {
             name: [] for name in BUFFERS
         }
-        # Per narrated caption: [text, start, speech length, how long
-        # the video waited for the speech to end]; reported at the end.
+        # Per narrated caption: [text, start, speech length, how long the video
+        # waited for the speech to end]; reported at the end.
         self.narration_log: list[list] = []
         # The caption shown and since when, for its subtitle.
         self.subtitle: tuple[str, float] | None = None
@@ -402,11 +406,11 @@ class SmartBuryIntro(Scene):
             ("Splitting the window", self.splitting_the_window),
             ("Outro", self.outro),
         ]
-        # To render only part of the video: SMART_BURY_UNTIL=Stage stops
-        # before that section, once the last speech has ended, and
-        # SMART_BURY_FROM=Outro skips the sections before that one (only
-        # for those not depending on earlier ones: the title, the cards,
-        # and the outro).
+        # To render only part of the video: SMART_BURY_UNTIL=Stage stops before
+        # that section, once the last speech has ended, and
+        # SMART_BURY_FROM=Outro skips the sections before that one (only for
+        # those not depending on earlier ones: the title, the cards, and the
+        # outro).
         until = os.environ.get("SMART_BURY_UNTIL")
         start = os.environ.get("SMART_BURY_FROM")
         for name, part in sections:
@@ -465,13 +469,13 @@ class SmartBuryIntro(Scene):
         self.list_labels = VGroup(title, direction)
 
     def pulse_updater(self, name: str):
-        """An updater showing NAME's pulse (see `build_list') over its box
-        for PULSE_TIME from each time in `self.highlights' for NAME,
-        expanding it to 1.2 times the box's size and back, and hiding it
-        otherwise.
+        """An updater showing NAME's pulse (see `build_list') over its box for
+        PULSE_TIME from each time in `self.highlights' for NAME, expanding it
+        to 1.2 times the box's size and back, and hiding it otherwise.
 
-        A separate mobject, so the box can move meanwhile.  It takes dt,
-        making it time-based, so `wait' renders every frame too.
+        A separate mobject, so the box can move meanwhile.  It takes dt, making
+        it time-based, so `wait' renders every frame too.
+
         """
         box = self.boxes[name]
 
@@ -529,8 +533,9 @@ class SmartBuryIntro(Scene):
     ) -> VGroup:
         """Fake text lines filling a window, in the buffer's color.
 
-        The window spans WIDTH from LEFT (by default, the whole frame).
-        A narrower window shows the same lines, narrower.
+        The window spans WIDTH from LEFT (by default, the whole frame).  A
+        narrower window shows the same lines, narrower.
+
         """
         rng = random.Random(name)
         scale = (width - 0.6) / (FRAME_WIDTH - 0.6)
@@ -553,8 +558,10 @@ class SmartBuryIntro(Scene):
         return lines
 
     def window_geometry(self) -> tuple[float, float]:
-        """Left edge and width of the selected window: the whole frame,
-        or its left half once split (see `split_window_right')."""
+        """Left edge and width of the selected window: the whole frame, or its
+        left half once split (see `split_window_right').
+
+        """
         if self.sim.others:
             return frame_left(), FRAME_WIDTH / 2
         return frame_left(), FRAME_WIDTH
@@ -593,16 +600,17 @@ class SmartBuryIntro(Scene):
         """The minibuffer's contents: PROMPT, then TYPED and a cursor.
 
         Prompt and input are one text, so the space between them is kept.
-        Empty, it is an invisible placeholder glyph rather than nothing,
-        so that transforming from it doesn't start from a stray point.
+        Empty, it is an invisible placeholder glyph rather than nothing, so
+        that transforming from it doesn't start from a stray point.
+
         """
         if not prompt:
             placeholder = Text(
                 "_", font=MONO, font_size=MINIBUFFER_FONT_SIZE
             ).set_opacity(0)
             return self.at_minibuffer(VGroup(placeholder))
-        # Without input, an invisible "M" holds the cursor's cell, one
-        # space after the prompt's colon.
+        # Without input, an invisible "M" holds the cursor's cell, one space
+        # after the prompt's colon.
         line = MarkupText(
             f'<span foreground="{PROMPT_COLOR}">'
             f'{escape(prompt)}</span>{escape(typed or "M")}',
@@ -633,11 +641,12 @@ class SmartBuryIntro(Scene):
     def repeat_message(self, report: str | None = None) -> VGroup:
         """The echo area after a command arming the repeat map.
 
-        Smart Bury's message reporting REPORT (e.g. "2/5"), if any, its
-        label in a face of its own, then `repeat-mode's hint, which
-        `repeat-mode' appends to the current message.  The hint's keys
-        are in REPEAT_KEYS's order, as in the real message, in key boxes
-        like Emacs' `help-key-binding' face.
+        Smart Bury's message reporting REPORT (e.g. "2/5"), if any, its label
+        in a face of its own, then `repeat-mode's hint, which `repeat-mode'
+        appends to the current message.  The hint's keys are in REPEAT_KEYS's
+        order, as in the real message, in key boxes like Emacs'
+        `help-key-binding' face.
+
         """
         keys = ", ".join(f"`{key}`" for key in REPEAT_KEYS)
         text = f"[Repeat with: {keys}]"
@@ -708,20 +717,21 @@ class SmartBuryIntro(Scene):
         already show their text (the title, the cards, the outro).
 
         FOOTNOTE, if any, is shown below the caption while it lasts, in
-        smaller, dimmer text; it is neither spoken nor a subtitle.  Mark
-        what it refers to with ^ in both.  A footnote given again with
-        the next caption stays in place.
+        smaller, dimmer text; it is neither spoken nor a subtitle.  Mark what
+        it refers to with ^ in both.  A footnote given again with the next
+        caption stays in place.
 
-        With narration, the caption waits for the previous one's speech
-        to end, then is spoken as it appears: SPEECH, or TEXT's words
-        (see `spoken').  Its speech may go on over what follows, until
-        the next caption.  Each caption is also a subtitle.  Each buffer
-        named pulses as it is said, except those in QUIET (e.g. "A").
+        With narration, the caption waits for the previous one's speech to end,
+        then is spoken as it appears: SPEECH, or TEXT's words (see `spoken').
+        Its speech may go on over what follows, until the next caption.  Each
+        caption is also a subtitle.  Each buffer named pulses as it is said,
+        except those in QUIET (e.g. "A").
+
         """
         self.finish_speech()
         self.end_subtitle()
         self.subtitle = (subtitle_text(text), self.time)
-        self.subtitle_markup = text     # for the TTML subtitles
+        self.subtitle_markup = text  # for the TTML subtitles
         # For `cue': what is said, from when, for how long, and when each
         # phoneme is said (with a model reporting durations).
         self.caption_words = spoken(text) if speech is None else speech
@@ -734,13 +744,12 @@ class SmartBuryIntro(Scene):
             path, duration, timings = self.narrator.clip(self.caption_words)
             self.caption_speech = duration
             self.caption_timings = timings
-            # Not `add_sound': it drops the sound when the previous
-            # animation came from Manim's cache, whose skipping state
-            # lasts until the next animation starts.
-            self.renderer.file_writer.add_sound(str(path),
-                                                self.caption_start)
-            # The next caption may start as soon as the last word ends,
-            # rather than the clip's trailing silence.
+            # Not `add_sound': it drops the sound when the previous animation
+            # came from Manim's cache, whose skipping state lasts until the
+            # next animation starts.
+            self.renderer.file_writer.add_sound(str(path), self.caption_start)
+            # The next caption may start as soon as the last word ends, rather
+            # than the clip's trailing silence.
             length = Narrator.spoken_length(duration, timings)
             self.speech_end = self.caption_start + length
             self.narration_log.append(
@@ -757,8 +766,8 @@ class SmartBuryIntro(Scene):
                 self.key_cues.append((key, found))
                 position = found + len(spoken_key(key))
         # Each buffer named ("A") pulses as it is said, starting a little
-        # earlier, unless QUIET: the storyboard quiets the buffers that are,
-        # or are becoming, current, which the window shows anyway.
+        # earlier, unless QUIET: the storyboard quiets the buffers that are, or
+        # are becoming, current, which the window shows anyway.
         if hasattr(self, "pulses"):
             for match in re.finditer(r'"([A-E])"', self.caption_words):
                 if match.group(1) in quiet:
@@ -809,8 +818,9 @@ class SmartBuryIntro(Scene):
     def keys_push(self, keys: str) -> list:
         """Animations appending a key box for KEYS to the keys panel.
 
-        The boxes already there slide left to make room, and those
-        pushed past the panel's left edge fade out.
+        The boxes already there slide left to make room, and those pushed past
+        the panel's left edge fade out.
+
         """
         new = key_box(keys)
         boxes = self.key_boxes + [new]
@@ -851,6 +861,7 @@ class SmartBuryIntro(Scene):
         A box jumping two or more slots arcs below the row (clockwise or
         counterclockwise depending on the direction), so it doesn't pass
         through the other boxes or leave the frame at the top.
+
         """
         moves = []
         for name in new:
@@ -876,9 +887,11 @@ class SmartBuryIntro(Scene):
         ).set_opacity(1)
 
     def state_animations(self) -> list:
-        """Animations showing Smart Bury's state (its panel, the counter,
-        and the "initial" marker) only while a sequence is active, i.e.
-        right after a Smart Bury command."""
+        """Animations showing Smart Bury's state (its panel, the counter, and
+        the "initial" marker) only while a sequence is active, i.e.  right
+        after a Smart Bury command.
+
+        """
         active = self.sim.last_command in SMART_COMMANDS
         opacity = 1.0 if active else 0.0
         return [
@@ -900,6 +913,7 @@ class SmartBuryIntro(Scene):
         """Animate the model's new state: list, window, state, minibuffer.
 
         EXTRA animations, if any, play along with it.
+
         """
         new = list(self.sim.blist)
         animations = self.box_moves(old, new) + list(extra or [])
@@ -921,9 +935,10 @@ class SmartBuryIntro(Scene):
     def glow(self, key: VGroup) -> VGroup:
         """Make KEY (a key box from `rich_text') glow in CURRENT_COLOR.
 
-        Its box's outline turns CURRENT_COLOR, and a soft halo follows
-        the box frame by frame, so it stays with the box while the box
-        slides or wiggles.  Returns the halo, for `glow_off'.
+        Its box's outline turns CURRENT_COLOR, and a soft halo follows the box
+        frame by frame, so it stays with the box while the box slides or
+        wiggles.  Returns the halo, for `glow_off'.
+
         """
         box = key[0][0]
         box.set_stroke(CURRENT_COLOR, width=3)
@@ -965,8 +980,9 @@ class SmartBuryIntro(Scene):
         """A copy of repeat-mode hint's KEY box, laid exactly over it.
 
         The message shown is the last command's (see `repeat_message').
-        Animating the copy (glow, wiggle) leaves the message untouched;
-        the copy is removed afterward.
+        Animating the copy (glow, wiggle) leaves the message untouched; the
+        copy is removed afterward.
+
         """
         target = self.repeat_message(self.sim.report)[0][
             REPEAT_KEYS.index(key)
@@ -990,15 +1006,15 @@ class SmartBuryIntro(Scene):
     ) -> None:
         """Press KEYS, run the model's ACTION, and animate the result.
 
-        KEYS are appended to the keys panel, unless they start with C-x
-        or the previous command did not arm the repeat map, in which case
-        they start a new key sequence there.  EXPECT, if given, is the
-        buffer order the storyboard expects.  PACE scales every duration
-        but the caption's fade, e.g. to end a part about when its
-        narration does.  FOOTNOTE goes with the caption (see `say').
-        HOLD, if given, replaces the pause after the step, e.g. 0 to go
-        straight on to the next one.  QUIET goes with the caption (see
-        `say').
+        KEYS are appended to the keys panel, unless they start with C-x or the
+        previous command did not arm the repeat map, in which case they start a
+        new key sequence there.  EXPECT, if given, is the buffer order the
+        storyboard expects.  PACE scales every duration but the caption's fade,
+        e.g. to end a part about when its narration does.  FOOTNOTE goes with
+        the caption (see `say').  HOLD, if given, replaces the pause after the
+        step, e.g. 0 to go straight on to the next one.  QUIET goes with the
+        caption (see `say').
+
         """
         if caption:
             self.say(caption, wait=0, footnote=footnote, quiet=quiet)
@@ -1018,10 +1034,10 @@ class SmartBuryIntro(Scene):
         glowing, halos, wiggles = [], [], []
         if repeating:
             # The minibuffer shows repeat-mode's message: the key pressed
-            # there, and its new box in the keys panel, glow and wiggle
-            # from the press through the step's animation.  In the
-            # minibuffer, a copy laid exactly over the key does it, so
-            # the message itself is untouched.
+            # there, and its new box in the keys panel, glow and wiggle from
+            # the press through the step's animation.  In the minibuffer, a
+            # copy laid exactly over the key does it, so the message itself is
+            # untouched.
             overlay = self.message_key(keys)
             for key in (overlay, self.key_boxes[-1]):
                 halos.append(self.glow(key))
@@ -1053,9 +1069,9 @@ class SmartBuryIntro(Scene):
             wait = hold
         suffix = keys.split()[-1]
         if keys.startswith("C-x ") and suffix in REPEAT_KEYS:
-            # repeat-mode's message has just appeared: highlight the key
-            # that repeats this command (the part after the prefix),
-            # during the wait that follows anyway.
+            # repeat-mode's message has just appeared: highlight the key that
+            # repeats this command (the part after the prefix), during the wait
+            # that follows anyway.
             overlay = self.message_key(suffix)
             halo = self.glow(overlay)
             self.play(
@@ -1079,18 +1095,19 @@ class SmartBuryIntro(Scene):
         expect: str | None = None,
         pace: float = 1.0,
     ) -> None:
-        """Any other command (e.g. typing), which ends the sequence and
-        clears `repeat-mode's message.  Without CAPTION, the one shown
-        stays.  PACE scales every duration but the caption's fade (see
-        `press')."""
+        """Any other command (e.g. typing), which ends the sequence and clears
+        `repeat-mode's message.  Without CAPTION, the one shown stays.  PACE
+        scales every duration but the caption's fade (see `press').
+
+        """
         if caption is not None:
             self.say(caption, wait=0)
         self.sim.work()
         if expect is not None:
             self.expect(expect, "work")
-        # "typing…" appears in the window, in place of its first line, and
-        # in the keys panel, while the whole Emacs frame briefly swells:
-        # the sequence is broken.
+        # "typing…" appears in the window, in place of its first line, and in
+        # the keys panel, while the whole Emacs frame briefly swells: the
+        # sequence is broken.
         line = self.window_body[0]
         typing = Text("typing…", font_size=32, slant="ITALIC", color=DIM_COLOR)
         typing.move_to(line.get_start(), aligned_edge=LEFT)
@@ -1135,8 +1152,9 @@ class SmartBuryIntro(Scene):
     ) -> None:
         """Vanilla C-x b NAME RET, typed in the minibuffer.
 
-        When NAME is the other buffer, the prompt's default, nothing is
-        typed: C-x b RET.  QUIET goes with the caption (see `say').
+        When NAME is the other buffer, the prompt's default, nothing is typed:
+        C-x b RET.  QUIET goes with the caption (see `say').
+
         """
         if caption:
             self.say(caption, wait=0, quiet=quiet)
@@ -1174,11 +1192,12 @@ class SmartBuryIntro(Scene):
     def split_window_right(
         self, caption: str, expect: str, footnote: str | None = None
     ) -> None:
-        """C-x 3: the selected window keeps the frame's left half, and a
-        new window on the right shows the current buffer too.
+        """C-x 3: the selected window keeps the frame's left half, and a new
+        window on the right shows the current buffer too.
 
         `split-window-right' is in `smart-bury-repeatable-commands', so
         repeat-mode's message shows, as after a Smart Bury command.
+
         """
         self.say(caption, wait=0, footnote=footnote)
         if not self.land("C-x 3"):
@@ -1199,8 +1218,8 @@ class SmartBuryIntro(Scene):
             color=GRAY_B,
             stroke_width=3,
         )
-        # The marker of the buffer shown in the right window, hidden while
-        # it is also the current buffer (see `split_markers').
+        # The marker of the buffer shown in the right window, hidden while it
+        # is also the current buffer (see `split_markers').
         self.right_frame = RoundedRectangle(
             corner_radius=0.2,
             width=1.55,
@@ -1238,10 +1257,11 @@ class SmartBuryIntro(Scene):
     def split_markers(self) -> list:
         """Animations updating the list's markers while the window is split.
 
-        `(other-buffer)' skips buffers shown in another window, so the
-        "other" marker, fixed on the second slot, shows only while the
-        other buffer is still second.  The right window's marker follows
-        its buffer, unless that is the current buffer.
+        `(other-buffer)' skips buffers shown in another window, so the "other"
+        marker, fixed on the second slot, shows only while the other buffer is
+        still second.  The right window's marker follows its buffer, unless
+        that is the current buffer.
+
         """
         other_shown = float(self.sim.other == self.sim.blist[1])
         right = self.sim.others[0]
@@ -1271,8 +1291,11 @@ class SmartBuryIntro(Scene):
         tagline = Text(TAGLINE, font_size=30, color=DIM_COLOR)
         VGroup(title, tagline).arrange(DOWN, buff=0.4)
         # "Smart Bury: keep wanted buffers at the top of the …"
-        self.say(f"Smart Bury: {TAGLINE[0].lower()}{TAGLINE[1:]}.", wait=0,
-                 visible=False)
+        self.say(
+            f"Smart Bury: {TAGLINE[0].lower()}{TAGLINE[1:]}.",
+            wait=0,
+            visible=False,
+        )
         self.play(Write(title), FadeIn(tagline, shift=UP * 0.2))
         self.wait(2)
         self.close_card()
@@ -1302,10 +1325,11 @@ class SmartBuryIntro(Scene):
 
         CAPTIONS are narrated and subtitles, not shown (see `say').
 
-        The first of CAPTIONS comes with the heading; the rows and then
-        the footer's lines appear one by one right after the heading;
-        the other captions follow, each as soon as the previous one's
-        speech ends.  The footer is neither said nor captioned.
+        The first of CAPTIONS comes with the heading; the rows and then the
+        footer's lines appear one by one right after the heading; the other
+        captions follow, each as soon as the previous one's speech ends.  The
+        footer is neither said nor captioned.
+
         """
         self.say(captions[0], wait=0, visible=False)
         self.play(FadeIn(heading, shift=DOWN * 0.15), run_time=0.6)
@@ -1322,8 +1346,10 @@ class SmartBuryIntro(Scene):
         self.close_card()
 
     def close_card(self) -> None:
-        """Clear the screen once the last caption's speech has ended,
-        ending its subtitle."""
+        """Clear the screen once the last caption's speech has ended, ending
+        its subtitle.
+
+        """
         self.finish_speech()
         self.end_subtitle()
         self.clear_all()
@@ -1522,8 +1548,8 @@ class SmartBuryIntro(Scene):
 
     def burying(self) -> None:
         # Burying right away would continue the switching sequence (smart
-        # burying goes on from its depth); working first makes the buries
-        # a fresh sequence that cycles through every buffer.
+        # burying goes on from its depth); working first makes the buries a
+        # fresh sequence that cycles through every buffer.
         self.work(expect="ABCDE")
         self.press(
             "C-x M--",
@@ -1549,10 +1575,10 @@ class SmartBuryIntro(Scene):
             "and how deep it is.",
             wait=0,
         )
-        # Each shown briefly as the narration names it: the "initial"
-        # marker, under A, at "where a sequence started"; the counter (with
-        # the state panel) at "how deep it is".  From then on
-        # they show only while a sequence is active (`state_animations').
+        # Each shown briefly as the narration names it: the "initial" marker,
+        # under A, at "where a sequence started"; the counter (with the state
+        # panel) at "how deep it is".  From then on they show only while a
+        # sequence is active (`state_animations').
         self.state_visible = True
         self.add(self.state_panel.set_opacity(0))
         self.initial_marker.move_to(
@@ -1591,7 +1617,9 @@ class SmartBuryIntro(Scene):
             expect="EABCD",
         )
         # No key named here: pressed as the narration says "wraps".
-        self.say('Past the last buffer, it wraps around to "A".', wait=0, quiet="A")
+        self.say(
+            'Past the last buffer, it wraps around to "A".', wait=0, quiet="A"
+        )
         self.cue("wraps")
         self.press("_", self.sim.switch_through, expect="ABCDE", fast=True)
         # Typing in A ends this part: the first sequence break.
@@ -1614,9 +1642,9 @@ class SmartBuryIntro(Scene):
             "…and `M-_` switches back and forth, as many times as needed.",
             expect="ABCDE",
         )
-        # A and B trade places twice more, extra fast: about 1.5 s of
-        # silence after the narration (paces here and below are tuned on
-        # the narration's lengths; see `make intro-narration').
+        # A and B trade places twice more, extra fast: about 1.5 s of silence
+        # after the narration (paces here and below are tuned on the
+        # narration's lengths; see `make intro-narration').
         for order in ("BACDE", "ABCDE", "BACDE", "ABCDE"):
             self.press(
                 "M-_",
@@ -1627,8 +1655,8 @@ class SmartBuryIntro(Scene):
             )
 
     def breaking_the_sequence(self) -> None:
-        # repeat-mode is still active from the previous part, so a plain
-        # `_' continues the same key sequence.
+        # repeat-mode is still active from the previous part, so a plain `_'
+        # continues the same key sequence.
         self.press(
             "_",
             self.sim.switch_through,
@@ -1683,9 +1711,9 @@ class SmartBuryIntro(Scene):
             pace=0.78,
         )
         self.press("_", self.sim.switch_through, expect="ABCDE", pace=0.78)
-        # Under this caption, the cycle again, extra fast, typing included;
-        # the burying part's typing in A ends it.  It starts with typing
-        # too: C-x _ right after the last _ would continue that sequence.
+        # Under this caption, the cycle again, extra fast, typing included; the
+        # burying part's typing in A ends it.  It starts with typing too: C-x _
+        # right after the last _ would continue that sequence.
         self.say(
             "This way, we easily cycle among three buffers.",
             wait=0.5,
@@ -1717,10 +1745,12 @@ class SmartBuryIntro(Scene):
                 self.work(expect=second, pace=pace)
 
     def why_smart(self) -> None:
-        """The "smart" in Smart Bury: a buffer buried right after reaching
-        it was just on the way, so the sequence goes on instead of back;
-        a further `_' then goes deeper still, leaving the buffer passed
-        (C) near the top of the list."""
+        """The "smart" in Smart Bury: a buffer buried right after reaching it
+        was just on the way, so the sequence goes on instead of back; a further
+        `_' then goes deeper still, leaving the buffer passed (C) near the top
+        of the list.
+
+        """
         # repeat-mode is still active, so plain keys continue.
         self.press(
             "_",
@@ -1747,7 +1777,9 @@ class SmartBuryIntro(Scene):
     def splitting_the_window(self) -> None:
         """C-x 3 arms the repeat map, so `_' right away fills the selected
         window with another buffer; the initial buffer, still shown in the
-        right window, keeps its place in the sequence."""
+        right window, keeps its place in the sequence.
+
+        """
         # A pause in the voice, as this is a new topic.
         self.finish_speech()
         self.wait(1)
@@ -1780,13 +1812,14 @@ class SmartBuryIntro(Scene):
         return note.move_to(UP * FOOTNOTE_Y)
 
     def caption_time_at(self, index: int) -> float:
-        """When the current caption's narration reaches the INDEXth
-        character of its words, in seconds from the caption's start.
+        """When the current caption's narration reaches the INDEXth character
+        of its words, in seconds from the caption's start.
 
         From the phoneme timings, with a model reporting durations (see
-        `Narrator.time_at'); otherwise estimated as a share of the
-        speech's length, or, without narration, of a reading speed of 15
-        characters per second.
+        `Narrator.time_at'); otherwise estimated as a share of the speech's
+        length, or, without narration, of a reading speed of 15 characters per
+        second.
+
         """
         words = self.caption_words
         if self.narrator is not None:
@@ -1801,24 +1834,30 @@ class SmartBuryIntro(Scene):
         return index / len(words) * length
 
     def wait_until(self, at: float, lead: float = 0.0) -> None:
-        """Wait until AT seconds from the current caption's start, or
-        LEAD seconds before; at once if that is past."""
+        """Wait until AT seconds from the current caption's start, or LEAD
+        seconds before; at once if that is past.
+
+        """
         remaining = self.caption_start + at - lead - self.time
         if remaining > 0:
             self.wait(remaining)
 
     def cue(self, phrase: str, nth: int = 1, lead: float = 0.0) -> None:
-        """Wait until the current caption's narration reaches its NTH
-        PHRASE, or LEAD seconds before (see `caption_time_at')."""
+        """Wait until the current caption's narration reaches its NTH PHRASE,
+        or LEAD seconds before (see `caption_time_at').
+
+        """
         index = -1
         for _ in range(nth):
             index = self.caption_words.index(phrase, index + 1)
         self.wait_until(self.caption_time_at(index), lead)
 
     def land(self, keys: str) -> bool:
-        """Wait until the narration says KEYS, when they are the next
-        keys the current caption names, so pressing them lands on their
-        names; return whether they are."""
+        """Wait until the narration says KEYS, when they are the next keys the
+        current caption names, so pressing them lands on their names; return
+        whether they are.
+
+        """
         tokens = keys.split()
         if [key for key, _ in self.key_cues[: len(tokens)]] != tokens:
             return False
@@ -1834,10 +1873,12 @@ class SmartBuryIntro(Scene):
             self.wait(self.speech_end - self.time)
 
     def report_narration(self) -> None:
-        """Print, per caption, how long its part of the video lasts
-        without narration, how long its speech lasts, and the difference
-        (positive: the video waited that long for the speech to end;
-        negative: that much silence follows the speech)."""
+        """Print, per caption, how long its part of the video lasts without
+        narration, how long its speech lasts, and the difference (positive: the
+        video waited that long for the speech to end; negative: that much
+        silence follows the speech).
+
+        """
         if self.narrator is None:
             return
         # Each caption lasts until the next, the last one until the end.
@@ -1856,11 +1897,12 @@ class SmartBuryIntro(Scene):
         print(f"The video waited for speech {waited:.1f} s in all.")
 
     def write_ttml(self) -> None:
-        """Write the captions as TTML subtitles, styled as in the video
-        (see `ttml_text'), into MEDIA_DIR/subtitles/smart-bury-intro.ttml.
+        """Write the captions as TTML subtitles, styled as in the video (see
+        `ttml_text'), into MEDIA_DIR/subtitles/smart-bury-intro.ttml.
 
-        Unlike the SRT subtitles Manim writes, whose markup YouTube
-        ignores, TTML keeps colors there (see `ttml_text').
+        Unlike the SRT subtitles Manim writes, whose markup YouTube ignores,
+        TTML keeps colors there (see `ttml_text').
+
         """
 
         def clock(seconds: float) -> str:
@@ -1882,8 +1924,10 @@ class SmartBuryIntro(Scene):
             "    <div>",
         ]
         for text, start, end in self.ttml_cues:
-            lines.append(f'      <p begin="{clock(start)}" end="{clock(end)}">'
-                         f"{ttml_text(text)}</p>")
+            lines.append(
+                f'      <p begin="{clock(start)}" end="{clock(end)}">'
+                f"{ttml_text(text)}</p>"
+            )
         lines += ["    </div>", "  </body>", "</tt>"]
         path = Path(config.media_dir) / "subtitles" / "smart-bury-intro.ttml"
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -12,10 +12,10 @@
 
 ;; This file is not part of GNU Emacs.
 
-;; This program is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or (at
-;; your option) any later version.
+;; This program is free software: you can redistribute it and/or
+;; modify it under the terms of the GNU General Public License as
+;; published by the Free Software Foundation, either version 3 of the
+;; License, or (at your option) any later version.
 
 ;; This program is distributed in the hope that it will be useful, but
 ;; WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -42,9 +42,9 @@
 ;; - `smart-bury-switch-through-buffers': switch to the other buffer,
 ;;   then to the 3rd, 4th... on successive calls, keeping the relative
 ;;   order of the remaining buffers.
-;; - `smart-bury-switch-to-other-buffer': switch back and forth between
-;;   the current and the other buffer; after switching through buffers,
-;;   it returns to the original one.
+;; - `smart-bury-switch-to-other-buffer': switch back and forth
+;;   between the current and the other buffer; after switching through
+;;   buffers, it returns to the original one.
 ;; - `smart-bury-bury-buffer': like `bury-buffer', but "smart".
 ;;
 ;; It also generates a `smart-bury-FN' wrapper for each command FN in
@@ -59,8 +59,8 @@
 ;; The mode binds `C-x _', `C-x M-_', and `C-x M--' to the three basic
 ;; commands and remaps the wrapped ones.  With `repeat-mode', each
 ;; command can then be repeated with just `_', `M-_', or `M--'.  See
-;; `smart-bury-prefix-key' and `smart-bury-keys' to change the keys, and
-;; README.md for full description and examples.
+;; `smart-bury-prefix-key' and `smart-bury-keys' to change the keys,
+;; and README.md for full description and examples.
 
 ;;; Code:
 
@@ -72,8 +72,8 @@
     smart-bury-switch-to-other-buffer
     smart-bury-bury-buffer)
   "The three basic Smart Bury commands, which always exist.
-Unlike the wrappers generated from `smart-bury-wrapped-commands',
-they are defined by hand.")
+Unlike the wrappers generated from `smart-bury-wrapped-commands', they
+are defined by hand.")
 
 (defvar smart-bury--commands (copy-sequence smart-bury--basic-commands)
   "Commands allowed by Smart Bury without resetting configuration.
@@ -146,8 +146,8 @@ of the current frame."
 (defun smart-bury--other-buffers nil
   "Return the buffers other than the current one, most recent first.
 Commands like `previous-buffer' change the window's buffer without
-recording it, leaving the current buffer anywhere in the list, so
-record it first: a sequence relies on the current buffer being first."
+recording it, leaving the current buffer anywhere in the list, so record
+it first: a sequence relies on the current buffer being first."
   (select-window (selected-window))
   (cdr (smart-bury--buffer-list)))
 
@@ -158,9 +158,9 @@ The Smart Bury commands are stored in `smart-bury--commands'."
 
 (defun smart-bury--maybe-start-sequence nil
   "Start a new Smart Bury sequence if this call begins one.
-When `smart-bury--starts-now-p', set `smart-bury--initial-buffer' to
-the current buffer, i.e., the one from which the first call to a Smart
-Bury command occurred.  Return non-nil if a new sequence started."
+When `smart-bury--starts-now-p', set `smart-bury--initial-buffer' to the
+current buffer, i.e., the one from which the first call to a Smart Bury
+command occurred.  Return non-nil if a new sequence started."
   (when (smart-bury--starts-now-p)
     (setq smart-bury--initial-buffer (current-buffer))
     t))
@@ -172,8 +172,8 @@ Bury command occurred.  Return non-nil if a new sequence started."
 (defun smart-bury--maybe-restart-sequence nil
   "Return non-nil if this call restarts the Smart Bury sequence.
 That is the case when `smart-bury--maybe-start-sequence' starts a new
-sequence, or when the user is back on `smart-bury--initial-buffer'
-while continuing one."
+sequence, or when the user is back on `smart-bury--initial-buffer' while
+continuing one."
   (or (smart-bury--maybe-start-sequence)
       (smart-bury--is-initial-p)))
 
@@ -188,8 +188,8 @@ BUFFER is not the current buffer and either
 
 The initial buffer stays eligible while displayed in another window
 \(e.g. right after splitting the window, both windows show it): a
-sequence counts it as the first buffer once it leaves it, so dropping
-it would make every later call skip a buffer, and
+sequence counts it as the first buffer once it leaves it, so dropping it
+would make every later call skip a buffer, and
 `smart-bury-switch-to-other-buffer' miss it."
   (and (buffer-live-p buffer)
        (not (minibufferp buffer))
@@ -243,12 +243,12 @@ window layout.  Return BUFFER."
 (defun smart-bury--walk-back (selection)
   "Switch to each buffer of SELECTION in reverse order.
 The first buffer of SELECTION thus ends up current, and the
-most-recently-used order of the others is rebuilt behind it, as
-if the user had never left it.  This is what lets
-`smart-bury-switch-to-other-buffer' return to the original buffer
-after a run of `smart-bury-switch-through-buffers' calls, with the
-\"list of all buffers\" as it was before -- so callers must never
-skip these intermediate switches by jumping straight to a buffer."
+most-recently-used order of the others is rebuilt behind it, as if the
+user had never left it.  This is what lets
+`smart-bury-switch-to-other-buffer' return to the original buffer after
+a run of `smart-bury-switch-through-buffers' calls, with the \"list of
+all buffers\" as it was before -- so callers must never skip these
+intermediate switches by jumping straight to a buffer."
   (mapc #'smart-bury--switch-to-buffer (reverse selection)))
 
 (defun smart-bury--go-through-buffers (buffers &optional allow-current)
@@ -300,11 +300,11 @@ the buffers on the way."
 (defun smart-bury-switch-to-other-buffer nil
   "Smartly switch to the other buffer.
 Switches to the buffer the user was in when the current Smart Bury
-sequence began (`smart-bury--initial-buffer').  If already back on
-that buffer -- either because this starts a fresh sequence, or
-because the user switched back to it already -- switches instead to
-the \"other\" buffer, the next most recently used one.  Calling this
-repeatedly therefore alternates back and forth between the two."
+sequence began (`smart-bury--initial-buffer').  If already back on that
+buffer -- either because this starts a fresh sequence, or because the
+user switched back to it already -- switches instead to the \"other\"
+buffer, the next most recently used one.  Calling this repeatedly
+therefore alternates back and forth between the two."
   (interactive)
   (setq smart-bury--counter
         (if (smart-bury--maybe-restart-sequence)
@@ -333,8 +333,8 @@ For more documentation, see `bury-buffer'."
 
 (defun smart-bury--interactive-args (fn)
   "Evaluate FN's `interactive' spec and return its list of arguments.
-Signal a `user-error' if FN is not an interactive command, e.g.
-because the package defining it is not loaded yet."
+Signal a `user-error' if FN is not an interactive command, e.g.  because
+the package defining it is not loaded yet."
   (let ((iform (or (interactive-form fn)
                    (user-error "`%s' is not an interactive command" fn))))
     (call-interactively (eval `(lambda (&rest args) ,iform args) t))))
@@ -360,8 +360,8 @@ not be defined yet (nor its library loaded) when the wrapper is."
 
 (defvar smart-bury--mode-map-generated (make-sparse-keymap)
   "Package-owned parent of `smart-bury-mode-map'.
-Rebuilt in place (same object -- see `smart-bury--rebuild-keymaps')
-from `smart-bury-prefix-key', `smart-bury-keys', and
+Rebuilt in place (same object -- see `smart-bury--rebuild-keymaps') from
+`smart-bury-prefix-key', `smart-bury-keys', and
 `smart-bury-wrapped-commands' every time one of them is set.")
 
 (defvar smart-bury-mode-map
@@ -369,13 +369,13 @@ from `smart-bury-prefix-key', `smart-bury-keys', and
     (set-keymap-parent map smart-bury--mode-map-generated)
     map)
   "Keymap for `smart-bury-mode'.
-Its own bindings belong to the user: Smart Bury never touches them.
-The package's bindings live in its parent,
-`smart-bury--mode-map-generated', which is rebuilt in place whenever
-`smart-bury-prefix-key', `smart-bury-keys', or
-`smart-bury-wrapped-commands' is set.  (`define-minor-mode' captures
-this keymap by value, not by live symbol lookup, which is why the
-parent is mutated rather than any keymap being reassigned.)")
+Its own bindings belong to the user: Smart Bury never touches them.  The
+package's bindings live in its parent, `smart-bury--mode-map-generated',
+which is rebuilt in place whenever `smart-bury-prefix-key',
+`smart-bury-keys', or `smart-bury-wrapped-commands' is
+set.  (`define-minor-mode' captures this keymap by value, not by live
+symbol lookup, which is why the parent is mutated rather than any keymap
+being reassigned.)")
 
 ;;;###autoload
 (define-minor-mode smart-bury-mode
@@ -538,10 +538,9 @@ that `:set' while `smart-bury.el' is still loading, before the options
 defined after it exist.  The last one defined triggers the first full
 build.
 
-An entry of `smart-bury-keys' whose key is not a single event is
-skipped with a warning rather than erroring, since that key also
-serves as the command's single-key repeat in
-`smart-bury-repeat-map'."
+An entry of `smart-bury-keys' whose key is not a single event is skipped
+with a warning rather than erroring, since that key also serves as the
+command's single-key repeat in `smart-bury-repeat-map'."
   (when (and (boundp 'smart-bury-prefix-key)
              (boundp 'smart-bury-keys)
              (boundp 'smart-bury-wrapped-commands))
@@ -580,8 +579,8 @@ Used as the `:set' function of `smart-bury-prefix-key' and
 (defcustom smart-bury-prefix-key "C-x"
   "Prefix key for the commands in `smart-bury-keys', in `kbd' format.
 May be the empty string, to bind those keys directly.  Setting this
-variable (e.g. via `setopt' or Customize) updates
-`smart-bury-mode-map' immediately."
+variable (e.g. via `setopt' or Customize) updates `smart-bury-mode-map'
+immediately."
   :type 'string
   :group 'smart-bury
   :set #'smart-bury--set-and-rebuild)
@@ -661,14 +660,14 @@ command is skipped, with a warning (see `smart-bury--valid-commands')."
 
 (defcustom smart-bury-wrapped-commands '(quit-window kill-current-buffer)
   "Vanilla commands to generate a `smart-bury-FN' wrapper for.
-`smart-bury-bury-buffer' is defined separately (it has its own entry
-in `smart-bury-keys') and is not part of this list.  Setting this
+`smart-bury-bury-buffer' is defined separately (it has its own entry in
+`smart-bury-keys') and is not part of this list.  Setting this
 variable (e.g. via `setopt' or Customize) regenerates the wrapper
 commands and keeps `smart-bury--commands', `smart-bury-mode-map', and
 `smart-bury-repeat-map' in sync.
 
-A command may be listed before the package defining it is loaded:
-its wrapper only needs it when called."
+A command may be listed before the package defining it is loaded: its
+wrapper only needs it when called."
   :type '(repeat (symbol :tag "Command"))
   :group 'smart-bury
   :set #'smart-bury--set-wrapped-commands)

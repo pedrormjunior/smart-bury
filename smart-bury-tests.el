@@ -15,10 +15,10 @@
 
 (defmacro smart-bury-test-with-buffers (bindings &rest body)
   "Bind each (VAR NAME) pair in BINDINGS to a fresh buffer named NAME.
-Reset Smart Bury's global state for the duration of BODY, and
-always kill the buffers afterward, even if BODY signals an error.
-`window-min-width' is lowered so that BODY can split the window side
-by side even in Emacs 27's 10-column batch frame."
+Reset Smart Bury's global state for the duration of BODY, and always
+kill the buffers afterward, even if BODY signals an error.
+`window-min-width' is lowered so that BODY can split the window side by
+side even in Emacs 27's 10-column batch frame."
   (declare (indent 1))
   `(let (,@(mapcar (lambda (b) `(,(car b) (generate-new-buffer ,(cadr b))))
                    bindings)
@@ -45,10 +45,9 @@ afterward even if BODY signals an error."
 
 (defmacro smart-bury-test-with-wrapped-commands (commands &rest body)
   "Run BODY with `smart-bury-wrapped-commands' temporarily set to
-COMMANDS (regenerating the wrapper commands, `smart-bury--commands',
-and `smart-bury-mode-map' to match), always restoring and
-regenerating the original value afterward even if BODY signals an
-error."
+COMMANDS (regenerating the wrapper commands, `smart-bury--commands', and
+`smart-bury-mode-map' to match), always restoring and regenerating the
+original value afterward even if BODY signals an error."
   (declare (indent 1))
   `(let ((smart-bury--orig-wrapped-commands smart-bury-wrapped-commands))
      (unwind-protect
@@ -73,9 +72,9 @@ signals an error."
 
 (defmacro smart-bury-test-with-keys (prefix keys &rest body)
   "Run BODY with `smart-bury-prefix-key' and `smart-bury-keys'
-temporarily set to PREFIX and KEYS (rebuilding Smart Bury's keymaps
-to match), always restoring the original values afterward even if
-BODY signals an error."
+temporarily set to PREFIX and KEYS (rebuilding Smart Bury's keymaps to
+match), always restoring the original values afterward even if BODY
+signals an error."
   (declare (indent 2))
   `(let ((smart-bury--orig-prefix-key smart-bury-prefix-key)
          (smart-bury--orig-keys smart-bury-keys))
@@ -89,11 +88,11 @@ BODY signals an error."
 
 (defmacro smart-bury-test-with-buffer-list (buffers &rest body)
   "Run BODY with `buffer-list' stubbed to always return the live
-buffers among BUFFERS. This isolates tests of the public commands
-from whatever real buffers happen to exist in the Emacs session
-running the tests, while still mimicking real `buffer-list', which
-never reports an already-killed buffer -- some of BUFFERS may get
-killed by BODY itself across a sequence of calls."
+buffers among BUFFERS. This isolates tests of the public commands from
+whatever real buffers happen to exist in the Emacs session running the
+tests, while still mimicking real `buffer-list', which never reports an
+already-killed buffer -- some of BUFFERS may get killed by BODY itself
+across a sequence of calls."
   (declare (indent 1))
   `(cl-letf (((symbol-function 'buffer-list)
               (lambda (&optional _frame) (seq-filter #'buffer-live-p ,buffers))))
@@ -146,10 +145,10 @@ around instead of failing to make progress."
 
 (ert-deftest smart-bury-test-go-through-buffers-no-eligible-signals-error ()
   "With zero eligible buffers (e.g. every candidate is already
-displayed in a window and ALLOW-CURRENT is nil), signal a
-`user-error' immediately instead of looping forever.  This is a
-regression test: an unbounded `while' loop used to spin forever
-chasing a target buffer count it could never reach."
+displayed in a window and ALLOW-CURRENT is nil), signal a `user-error'
+immediately instead of looping forever.  This is a regression test: an
+unbounded `while' loop used to spin forever chasing a target buffer
+count it could never reach."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
     (switch-to-buffer a)
     (save-window-excursion
@@ -257,18 +256,17 @@ lands each time."
 
 (ert-deftest smart-bury-test-switch-through-then-switch-to-other-returns-to-origin ()
   "Repetitive calls to `smart-bury-switch-through-buffers' followed
-by a single call to `smart-bury-switch-to-other-buffer' must bring
-back the original buffer.
+by a single call to `smart-bury-switch-to-other-buffer' must bring back
+the original buffer.
 
 Unlike the other public-command tests above, this one does NOT stub
 `buffer-list': the invariant it checks depends on the real, dynamic
-most-recently-used buffer ordering that `switch-to-buffer' maintains
-as a side effect of the intermediate switches `smart-bury' performs
-while cycling -- exactly the behavior a prior, more \"clever\"
-rewrite of `smart-bury--go-through-buffers' silently dropped (it
-computed the right final buffer but skipped the intermediate
-switches, so this invariant broke even though every other test
-still passed)."
+most-recently-used buffer ordering that `switch-to-buffer' maintains as
+a side effect of the intermediate switches `smart-bury' performs while
+cycling -- exactly the behavior a prior, more \"clever\" rewrite of
+`smart-bury--go-through-buffers' silently dropped (it computed the right
+final buffer but skipped the intermediate switches, so this invariant
+broke even though every other test still passed)."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
     (switch-to-buffer a)
     (let ((last-command 'some-other-command))
@@ -283,15 +281,14 @@ still passed)."
 
 (ert-deftest smart-bury-test-sequence-with-initial-buffer-in-other-window ()
   "With the initial buffer also shown in another window (e.g. right
-after splitting the window), switching through buffers visits them
-in order, and switching to the other buffer returns to the initial
-one.
+after splitting the window), switching through buffers visits them in
+order, and switching to the other buffer returns to the initial one.
 
 Regression test: the initial buffer, being displayed in the other
 window, was not eligible, so every call after the first skipped a
 buffer, and `smart-bury-switch-to-other-buffer' landed on the skipped
-buffer instead of the initial one.  Like the test above, this one
-needs the real `buffer-list'."
+buffer instead of the initial one.  Like the test above, this one needs
+the real `buffer-list'."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c") (d "sb-d"))
     (delete-other-windows)
     (dolist (buffer (list d c b a))
@@ -328,8 +325,8 @@ another window, unless it is the initial buffer."
 
 (ert-deftest smart-bury-test-include-displayed-buffers ()
   "With `smart-bury-include-displayed-buffers' non-nil, switching
-through buffers also goes through a buffer displayed in another
-window, and the sequence still returns to the initial buffer."
+through buffers also goes through a buffer displayed in another window,
+and the sequence still returns to the initial buffer."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c") (d "sb-d"))
     (delete-other-windows)
     (dolist (buffer (list d c b a))
@@ -350,10 +347,10 @@ window, and the sequence still returns to the initial buffer."
   "Switching through buffers ignores `display-buffer-alist', even with
 `switch-to-buffer-obey-display-actions' non-nil.
 
-Regression test: Smart Bury switches with `switch-to-buffer', which
-then obeyed the display action of every buffer passed through, so one
-shown in the full frame deleted the other window of a split, and the
-sequence went on in whatever window the action chose."
+Regression test: Smart Bury switches with `switch-to-buffer', which then
+obeyed the display action of every buffer passed through, so one shown
+in the full frame deleted the other window of a split, and the sequence
+went on in whatever window the action chose."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c") (d "sb-d"))
     (delete-other-windows)
     (dolist (buffer (list d c b a))
@@ -404,9 +401,9 @@ although C is current."
   "A sequence started on a buffer that `previous-buffer' reached goes
 through the most recent buffers in order.
 
-Regression test: both switch commands take the current buffer to be
-the first of `buffer-list', which `previous-buffer' does not ensure, so
-they dropped the actual first buffer and skipped it.  Needs the real
+Regression test: both switch commands take the current buffer to be the
+first of `buffer-list', which `previous-buffer' does not ensure, so they
+dropped the actual first buffer and skipped it.  Needs the real
 `buffer-list'."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c") (d "sb-d"))
     (smart-bury-test-on-unrecorded-buffer a b c d
@@ -437,13 +434,14 @@ buffer, the same one `other-buffer' gives.  See
 (ert-deftest smart-bury-test-switch-to-other-buffer-alternates-back-and-forth ()
   "A fresh call to `smart-bury-switch-to-other-buffer' switches to the
 \"other\" buffer; calling it again (continuing the sequence) switches
-back to the buffer the sequence started from; calling it a third
-time switches to that same \"other\" buffer again -- i.e. it keeps
+back to the buffer the sequence started from; calling it a third time
+switches to that same \"other\" buffer again -- i.e. it keeps
 alternating between exactly the same two buffers.
 
-Like `smart-bury-test-switch-through-then-switch-to-other-returns-to-origin'
-above, this does NOT stub `buffer-list': the alternation depends on
-the real, dynamic most-recently-used buffer ordering."
+Like
+`smart-bury-test-switch-through-then-switch-to-other-returns-to-origin'
+above, this does NOT stub `buffer-list': the alternation depends on the
+real, dynamic most-recently-used buffer ordering."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
     (switch-to-buffer a)
     (let ((last-command 'some-other-command))
@@ -510,8 +508,8 @@ order."
 
 (defun smart-bury-test-total ()
   "Return how many buffers a sequence goes through in the test session.
-With a single window, that is every buffer but the internal ones,
-whose names start with a space."
+With a single window, that is every buffer but the internal ones, whose
+names start with a space."
   (length (seq-remove (lambda (buffer)
                         (string-prefix-p " " (buffer-name buffer)))
                       (buffer-list))))
@@ -539,8 +537,8 @@ whose names start with a space."
 
 (ert-deftest smart-bury-test-messages-positions-switching ()
   "Switching through buffers reports positions 2, 3... wrapping around
-to 1 back on the initial buffer; switching to the other buffer
-reports 1 on the initial buffer and 2 on the other one."
+to 1 back on the initial buffer; switching to the other buffer reports 1
+on the initial buffer and 2 on the other one."
   (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b") (c "sb-c"))
     (dolist (buffer (list c b a))
       (switch-to-buffer buffer))
@@ -690,9 +688,9 @@ first one current and displayed in the selected window."
   "Call COMMANDS interactively in order, as if typed one after another.
 Each call sees the previous one as `last-command', including across
 successive calls to this function within one
-`smart-bury-test-with-case'.  The symbol `work' stands for any
-non-Smart Bury command (e.g. typing in the buffer), which ends the
-current Smart Bury sequence."
+`smart-bury-test-with-case'.  The symbol `work' stands for any non-Smart
+Bury command (e.g. typing in the buffer), which ends the current Smart
+Bury sequence."
   (dolist (command commands)
     (if (eq command 'work)
         (setq smart-bury-test--previous 'self-insert-command)
@@ -703,8 +701,8 @@ current Smart Bury sequence."
 (defmacro smart-bury-test-with-case (&rest body)
   "Run BODY with fresh buffers A, B, C, D, and E bound to `a'...`e',
 ordered so that the \"list of all buffers\" starts `A B C D E', `A'
-being current, and no Smart Bury sequence in progress.  BUFS is bound
-to the list of all five."
+being current, and no Smart Bury sequence in progress.  BUFS is bound to
+the list of all five."
   (declare (indent 0))
   `(smart-bury-test-with-buffers ((a "A") (b "B") (c "C") (d "D") (e "E"))
      (let ((bufs (list a b c d e))
@@ -764,8 +762,8 @@ untouched; then a new `C-x _' (or a continuing `_', `C-x M-_', or
 
 (ert-deftest smart-bury-test-readme-case-5 ()
   "Case 5: `C-x _ M--' buries `B' on the way to `C', and `M-_' gets
-back to `A', leaving `A C D E B'.  After working on `A', repeating
-with `C-x _' then `M-_' keeps that same list."
+back to `A', leaving `A C D E B'.  After working on `A', repeating with
+`C-x _' then `M-_' keeps that same list."
   (smart-bury-test-with-case
     (smart-bury-test--run #'smart-bury-switch-through-buffers
                           #'smart-bury-bury-buffer)
@@ -845,8 +843,8 @@ Smart Bury equivalents, regardless of what key they are bound to."
 
 (ert-deftest smart-bury-test-mode-remap-active-when-enabled ()
   "`command-remapping' only resolves `bury-buffer' to
-`smart-bury-bury-buffer' while the mode is enabled -- i.e. the remap
-is actually live in the active keymaps, not just present in
+`smart-bury-bury-buffer' while the mode is enabled -- i.e. the remap is
+actually live in the active keymaps, not just present in
 `smart-bury-mode-map' in isolation."
   (should-not (command-remapping 'bury-buffer))
   (smart-bury-test-with-mode

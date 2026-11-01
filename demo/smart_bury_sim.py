@@ -2,19 +2,20 @@
 
 Each method mirrors its counterpart in ../smart-bury.el, so the animation
 cannot show a "list of all buffers" order the package does not produce.
-Buffers are plain names, and ``blist[0]`` is the current buffer, shown
-in the selected window.  The window may be split (``split_window``): the
-other windows then show the buffers in ``others``, which only matters
-for which buffers are eligible and for ``other_buffer``.
+Buffers are plain names, and ``blist[0]`` is the current buffer, shown in the
+selected window.  The window may be split (``split_window``): the other windows
+then show the buffers in ``others``, which only matters for which buffers are
+eligible and for ``other_buffer``.
 
 Modeling assumption: vanilla ``bury-buffer`` and ``quit-window`` move the
-current buffer to the end of the list, and the window then shows the new
-head of the list.  In Emacs the window's own buffer history decides
-instead; for the single-window scenarios here the result is the same,
-which ``check()`` confirms against the README cases.
+current buffer to the end of the list, and the window then shows the new head
+of the list.  In Emacs the window's own buffer history decides instead; for the
+single-window scenarios here the result is the same, which ``check()`` confirms
+against the README cases.
 
-Run this file directly to replay the README cases (and a few more) and
-exit non-zero on any mismatch.
+Run this file directly to replay the README cases (and a few more) and exit
+non-zero on any mismatch.
+
 """
 
 from __future__ import annotations
@@ -31,22 +32,26 @@ SWITCH_TO_BUFFER = "switch-to-buffer"
 SPLIT_WINDOW_BELOW = "split-window-below"
 SPLIT_WINDOW_RIGHT = "split-window-right"
 
-# `smart-bury--commands' with the default `smart-bury-wrapped-commands'
-# (only the wrappers the demo uses).
+# `smart-bury--commands' with the default `smart-bury-wrapped-commands' (only
+# the wrappers the demo uses).
 SMART_COMMANDS = {SWITCH_THROUGH, SWITCH_TO_OTHER, BURY, QUIT}
-# The default `smart-bury-repeatable-commands': not Smart Bury commands
-# (they don't continue a sequence), but they arm the repeat map too.
+# The default `smart-bury-repeatable-commands': not Smart Bury commands (they
+# don't continue a sequence), but they arm the repeat map too.
 REPEATABLE_COMMANDS = {SPLIT_WINDOW_BELOW, SPLIT_WINDOW_RIGHT}
 
 
 def other_buffer(blist, others=()) -> str | None:
-    """`(other-buffer)': the most recent buffer other than the current
-    one, skipping internal buffers (names starting with a space), and
-    preferring buffers not shown in another window (in OTHERS).  It is
-    also `C-x b's default."""
+    """`(other-buffer)': the most recent buffer other than the current one,
+    skipping internal buffers (names starting with a space), and preferring
+    buffers not shown in another window (in OTHERS).  It is also `C-x b's
+    default.
+
+    """
     candidates = [b for b in blist[1:] if not b.startswith(" ")]
-    return next((b for b in candidates if b not in others),
-                next(iter(candidates), None))
+    return next(
+        (b for b in candidates if b not in others),
+        next(iter(candidates), None),
+    )
 
 
 @dataclass(frozen=True)
@@ -79,8 +84,8 @@ class SmartBury:
         self.initial: str | None = None  # `smart-bury--initial-buffer'
         self.last_command = WORK  # `last-command'
         self.others: list[str] = []  # shown in the other windows
-        # What the last command reported (`smart-bury--report'), e.g.
-        # "3/5"; None after any other command.
+        # What the last command reported (`smart-bury--report'), e.g.  "3/5";
+        # None after any other command.
         self.report: str | None = None
         self.steps: list[Step] = []
 
@@ -124,7 +129,7 @@ class SmartBury:
         if buffer.startswith(" "):
             return False
         if buffer != self.current and buffer not in self.others:
-            return True             # not displayed in any window
+            return True  # not displayed in any window
         if buffer == self.current:
             return allow_current
         # Shown in another window: only the initial buffer stays eligible.
@@ -164,19 +169,29 @@ class SmartBury:
         if starts_now:
             self.initial = self.current
         else:
-            last = self._go_through_buffers(list(self.blist), allow_current=True)
+            last = self._go_through_buffers(
+                list(self.blist), allow_current=True
+            )
             self._switch(last)
             if was_initial:
                 self.initial = last
 
     # Commands
 
-    def _record(self, keys: str, command: str, caption: str,
-                report: str | None = None) -> Step:
+    def _record(
+        self, keys: str, command: str, caption: str, report: str | None = None
+    ) -> Step:
         self.last_command = command
         self.report = report
-        step = Step(keys, command, caption, tuple(self.blist),
-                    self.initial, self.counter, tuple(self.others))
+        step = Step(
+            keys,
+            command,
+            caption,
+            tuple(self.blist),
+            self.initial,
+            self.counter,
+            tuple(self.others),
+        )
         self.steps.append(step)
         return step
 
@@ -185,16 +200,22 @@ class SmartBury:
             self.counter = 1
         self._switch(self._go_through_buffers(self.blist[1:]))
         self.counter += 1
-        return self._record(keys, SWITCH_THROUGH, caption,
-                            self._position(self.counter))
+        return self._record(
+            keys, SWITCH_THROUGH, caption, self._position(self.counter)
+        )
 
     def switch_to_other(self, keys: str = "M-_", caption: str = "") -> Step:
-        self.counter = (2 if self._maybe_restart_sequence()
-                        else max(2, self.counter))
+        self.counter = (
+            2 if self._maybe_restart_sequence() else max(2, self.counter)
+        )
         self._walk_back(self._select_buffers(self.blist[1:], self.counter - 1))
         self.counter = 2
-        return self._record(keys, SWITCH_TO_OTHER, caption,
-                            self._position(1 if self._is_initial_p() else 2))
+        return self._record(
+            keys,
+            SWITCH_TO_OTHER,
+            caption,
+            self._position(1 if self._is_initial_p() else 2),
+        )
 
     def bury(self, keys: str = "M--", caption: str = "") -> Step:
         self._run_function(self._bury)
@@ -204,25 +225,32 @@ class SmartBury:
         self._run_function(self._bury)
         return self._record(keys, QUIT, caption, self._position(self.counter))
 
-    def switch_to_buffer(self, name: str, keys: str = "C-x b",
-                         caption: str = "") -> Step:
+    def switch_to_buffer(
+        self, name: str, keys: str = "C-x b", caption: str = ""
+    ) -> Step:
         """Vanilla `switch-to-buffer' (C-x b NAME RET).  Not a Smart Bury
-        command, so the next Smart Bury command starts a new sequence."""
+        command, so the next Smart Bury command starts a new sequence.
+
+        """
         self._switch(name)
         return self._record(keys, SWITCH_TO_BUFFER, caption)
 
-    def split_window(self, keys: str = "C-x 3",
-                     command: str = SPLIT_WINDOW_RIGHT,
-                     caption: str = "") -> Step:
-        """`split-window-right' (or COMMAND, e.g. `split-window-below'):
-        the new window shows the current buffer too, and the selected
-        window stays selected.  Not a Smart Bury command, so the next
-        Smart Bury command starts a new sequence.
+    def split_window(
+        self,
+        keys: str = "C-x 3",
+        command: str = SPLIT_WINDOW_RIGHT,
+        caption: str = "",
+    ) -> Step:
+        """`split-window-right' (or COMMAND, e.g. `split-window-below'): the
+        new window shows the current buffer too, and the selected window stays
+        selected.  Not a Smart Bury command, so the next Smart Bury command
+        starts a new sequence.
 
-        As a repeatable command, with `repeat-mode' on (as in the
-        demos), it reports position 1, out of the buffers a sequence from
-        the current buffer goes through (see
-        `smart-bury--report-repeatable')."""
+        As a repeatable command, with `repeat-mode' on (as in the demos), it
+        reports position 1, out of the buffers a sequence from the current
+        buffer goes through (see `smart-bury--report-repeatable').
+
+        """
         self.others.append(self.current)
         saved, self.initial = self.initial, self.current
         report = self._position(1)
@@ -273,10 +301,14 @@ def check() -> list[str]:
         _expect(f"case 3 ({cmd}) back", sb.current, "A", failures)
         _expect(f"case 3 ({cmd}) list", order(sb), "ABCDE", failures)
 
-    # Case 4: C-x _ _ reaches C, M-_ returns to A; then any of four
-    # follow-ups reaches B.
-    for follow in (("work", "switch_through"), ("switch_through",),
-                   ("work", "switch_to_other"), ("switch_to_other",)):
+    # Case 4: C-x _ _ reaches C, M-_ returns to A; then any of four follow-ups
+    # reaches B.
+    for follow in (
+        ("work", "switch_through"),
+        ("switch_through",),
+        ("work", "switch_to_other"),
+        ("switch_to_other",),
+    ):
         sb = SmartBury(BUFFERS)
         sb.switch_through()
         sb.switch_through()
@@ -304,8 +336,8 @@ def check() -> list[str]:
     _expect("case 5 again back", sb.current, "A", failures)
     _expect("case 5 again list", order(sb), "ACDEB", failures)
 
-    # Case 6: with work in between, C-x _ _ cycles A -> C -> B -> A;
-    # without work, four presses reach E.
+    # Case 6: with work in between, C-x _ _ cycles A -> C -> B -> A; without
+    # work, four presses reach E.
     sb = SmartBury(BUFFERS)
     for expected in ("C", "B", "A"):
         sb.work()
@@ -346,8 +378,8 @@ def check() -> list[str]:
         sb.bury()
     _expect("bury all", order(sb), "ABCDE", failures)
 
-    # Switching through to the last buffer, working on it, then burying
-    # it returns to the initial order.
+    # Switching through to the last buffer, working on it, then burying it
+    # returns to the initial order.
     sb = SmartBury(BUFFERS)
     for _ in BUFFERS[1:]:
         sb.switch_through()
@@ -363,32 +395,43 @@ def check() -> list[str]:
     sb.switch_to_buffer("D")
     _expect("C-x b D", order(sb), "DBACE", failures)
     sb.switch_through()
-    _expect("C-x b then C-x _", (sb.current, sb.initial), ("B", "D"),
-            failures)
+    _expect("C-x b then C-x _", (sb.current, sb.initial), ("B", "D"), failures)
 
     # Reported positions, as in the `smart-bury-test-messages-positions-*'
-    # tests: switching through wraps around to 1 back on the initial
-    # buffer, switching to the other buffer alternates 1 and 2, and
-    # burying in a fresh sequence stays at 1.
+    # tests: switching through wraps around to 1 back on the initial buffer,
+    # switching to the other buffer alternates 1 and 2, and burying in a fresh
+    # sequence stays at 1.
     sb = SmartBury(BUFFERS)
     reports = []
     for command in [sb.switch_through] * 7 + [sb.switch_to_other] * 2:
         command()
         reports.append(sb.report)
-    _expect("reports switching", reports,
-            ["2/5", "3/5", "4/5", "5/5", "1/5", "2/5", "3/5", "1/5", "2/5"],
-            failures)
+    _expect(
+        "reports switching",
+        reports,
+        ["2/5", "3/5", "4/5", "5/5", "1/5", "2/5", "3/5", "1/5", "2/5"],
+        failures,
+    )
     sb = SmartBury(BUFFERS)
     reports = []
-    for command in [sb.bury, sb.bury, sb.work, sb.switch_through,
-                    sb.switch_through]:
+    for command in [
+        sb.bury,
+        sb.bury,
+        sb.work,
+        sb.switch_through,
+        sb.switch_through,
+    ]:
         command()
         reports.append(sb.report)
-    _expect("reports burying", reports, ["1/5", "1/5", None, "2/5", "3/5"],
-            failures)
+    _expect(
+        "reports burying",
+        reports,
+        ["1/5", "1/5", None, "2/5", "3/5"],
+        failures,
+    )
 
-    # Right after splitting the window, the initial buffer, still shown in
-    # the other window, keeps its place in the sequence (as in the test
+    # Right after splitting the window, the initial buffer, still shown in the
+    # other window, keeps its place in the sequence (as in the test
     # `smart-bury-test-sequence-with-initial-buffer-in-other-window').
     sb = SmartBury(["A", "B", "C", "D"])
     sb.split_window()
@@ -399,9 +442,9 @@ def check() -> list[str]:
     sb.switch_to_other()
     _expect("split, then _ _ M-_", sb.current, "A", failures)
 
-    # The intro's split (verified against smart-bury.el in batch Emacs):
-    # from A C D E B, C-x 3 _ _ puts D next to A, and (other-buffer)
-    # skips A, shown in the other window.
+    # The intro's split (verified against smart-bury.el in batch Emacs): from A
+    # C D E B, C-x 3 _ _ puts D next to A, and (other-buffer) skips A, shown in
+    # the other window.
     sb = SmartBury(["A", "C", "D", "E", "B"])
     sb.split_window()
     _expect("intro split other", sb.other, "C", failures)
@@ -415,8 +458,12 @@ def check() -> list[str]:
 
     # The other buffer is the second in the list, skipping internal ones.
     _expect("other", SmartBury(BUFFERS).other, "B", failures)
-    _expect("other skips internal", SmartBury(["A", " *x*", "C"]).other, "C",
-            failures)
+    _expect(
+        "other skips internal",
+        SmartBury(["A", " *x*", "C"]).other,
+        "C",
+        failures,
+    )
 
     return failures
 
