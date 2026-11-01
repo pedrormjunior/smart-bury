@@ -169,15 +169,16 @@ TRANSLATIONS = {
         "Volver a ordenar la lista requiere escribir más.",
         "Per rimettere in ordine l’elenco bisogna digitare ancora.",
     ),
-    "Smart Bury moves through buffers without typing names…": (
-        "O Smart Bury percorre os buffers sem digitar nomes…",
-        "Smart Bury recorre los búferes sin escribir nombres…",
-        "Smart Bury scorre i buffer senza digitare nomi…",
-    ),
-    "…and keeps the list in order.": (
-        "…e mantém a lista em ordem.",
-        "…y mantiene la lista en orden.",
-        "…e mantiene in ordine l’elenco.",
+    (
+        "Smart Bury moves through buffers without typing names and keeps "
+        "the list in order."
+    ): (
+        "O Smart Bury percorre os buffers sem digitar nomes e mantém a lista "
+        "em ordem.",
+        "Smart Bury recorre los búferes sin escribir nombres y mantiene la "
+        "lista en orden.",
+        "Smart Bury scorre i buffer senza digitare nomi e mantiene in ordine "
+        "l’elenco.",
     ),
     "Smart Bury remembers where a ~sequence~ started and how deep it is.": (
         (

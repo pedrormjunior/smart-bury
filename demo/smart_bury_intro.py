@@ -121,7 +121,7 @@ INITIAL_Y = -2.44
 KEYS_BOX_WIDTH = 3.4
 SIDE_X = 7.11 - MARGIN - KEYS_BOX_WIDTH / 2
 KEYS_Y = 0.2
-CAPTION_Y = -3.3
+CAPTION_Y = -3.1
 FOOTNOTE_Y = CAPTION_Y - 0.5  # a caption's footnote, right below it
 CAPTION_FADE = 0.2  # how long a caption takes to replace the previous one
 SPEECH_DELAY = 0.1  # how long after a shown caption starts its speech does
@@ -1549,9 +1549,10 @@ class SmartBuryIntro(Scene):
         )
         self.switch_to_buffer("A", expect="ABCDE", fast=True)
         self.say(
-            "Smart Bury moves through buffers without typing names…", wait=1.8
+            "Smart Bury moves through buffers without typing names and keeps "
+            "the list in order.",
+            wait=1.8,
         )
-        self.say("…and keeps the list in order.", wait=1.8)
 
     def burying(self) -> None:
         # Burying right away would continue the switching sequence (smart
