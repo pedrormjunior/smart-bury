@@ -122,8 +122,9 @@ KEYS_BOX_WIDTH = 3.4
 SIDE_X = 7.11 - MARGIN - KEYS_BOX_WIDTH / 2
 KEYS_Y = 0.2
 CAPTION_Y = -3.1
-FOOTNOTE_Y = CAPTION_Y - 0.5  # a caption's footnote, right below it
+FOOTNOTE_Y = 3.1  # a caption's footnote, above the keys panel
 CAPTION_FADE = 0.2  # how long a caption takes to replace the previous one
+FOOTNOTE_FADE = 0.8  # how long a footnote takes to fade in or out
 SPEECH_DELAY = 0.1  # how long after a shown caption starts its speech does
 PULSE_TIME = 0.8  # how long a buffer's box pulses when the voice names it
 PULSE_LEAD = 0.45  # how much earlier than its name the pulse starts
@@ -228,8 +229,9 @@ def subtitle_text(text: str) -> str:
 def ttml_text(text: str) -> str:
     """TEXT (see `parse_rich') as TTML spans, styled as in the video: keys
     monospace on the key boxes' gray, in their outline's color, {symbols}
-    monospace in the highlight color, |symbols| monospace, ~text~ italic, and
-    buffer names ("A") unquoted in their colors; footnote markers are dropped.
+    monospace in the highlight color, |symbols| monospace, ~text~ italic,
+    buffer names ("A") unquoted in their colors, and footnote markers as
+    asterisks in the highlight color.
 
     YouTube honors the colors, but ignores fonts and backgrounds (tested with
     every generic font family and a few named ones, on spans and whole lines),
@@ -260,6 +262,7 @@ def ttml_text(text: str) -> str:
             )
             i += 1
         elif char == "^":
+            out.append(f'<span tts:color="{HIGHLIGHT}">*</span>')
             i += 1
         else:
             out.append(escape(char))
@@ -722,7 +725,7 @@ class SmartBuryIntro(Scene):
         Not VISIBLE, it is only narrated and a subtitle, for screens that
         already show their text (the title, the cards, the outro).
 
-        FOOTNOTE, if any, is shown below the caption while it lasts, in
+        FOOTNOTE, if any, is shown at the top right while it lasts, in
         smaller, dimmer text; it is neither spoken nor a subtitle.  Mark what
         it refers to with ^ in both.  A footnote given again with the next
         caption stays in place.
@@ -796,10 +799,11 @@ class SmartBuryIntro(Scene):
         if footnote is not None and footnote == self.footnote_text:
             note = self.footnote  # stays in place
         else:
-            old.append(self.footnote)
+            if self.footnote is not None:
+                self.footnote.add_updater(self.footnote_fader(False))
             if footnote is not None:
-                note = self.footnote_text_mobject(footnote)
-                shown.append(note)
+                note = self.footnote_text_mobject(footnote).set_opacity(0)
+                self.add(note.add_updater(self.footnote_fader(True)))
         old = [m for m in old if m is not None]
         self.play(
             *(FadeOut(m) for m in old),
@@ -810,6 +814,23 @@ class SmartBuryIntro(Scene):
         self.footnote_text = footnote
         if wait > 0:
             self.wait(wait)
+
+    def footnote_fader(self, appearing: bool):
+        """An updater fading a footnote in, if APPEARING, or out, from now, for
+        FOOTNOTE_FADE.
+
+        Time-based (see `pulse_updater'), rather than an animation in `say',
+        so that it outlasts the caption's quick fade without holding back the
+        keys pressed as the caption is said.
+
+        """
+        start = self.time
+
+        def update(note, dt):
+            level = min(1.0, (self.time - start) / FOOTNOTE_FADE)
+            note.set_opacity(level if appearing else 1.0 - level)
+
+        return update
 
     def expect(self, order: str, what: str) -> None:
         """Assert that the model's buffer order is ORDER after WHAT."""
@@ -1792,7 +1813,7 @@ class SmartBuryIntro(Scene):
         self.finish_speech()
         self.wait(1)
         # The footnote stays through the next caption too.
-        see_note = "^ See {smart-bury-repeatable-commands}"
+        see_note = "^ See\n{smart-bury-repeatable-commands}"
         self.split_window_right(
             "`C-x 3`^ splits the window and arms the repeat map.",
             expect="DACEB",
@@ -1815,9 +1836,15 @@ class SmartBuryIntro(Scene):
         )
 
     def footnote_text_mobject(self, text: str) -> VGroup:
-        """TEXT (see `parse_rich') as a footnote, below the caption."""
-        note = rich_text(text, font_size=20, color=WHITE)  # as captions
-        return note.move_to(UP * FOOTNOTE_Y)
+        """TEXT (see `parse_rich'), which may have several lines, as a
+        footnote, at the top right, above the keys panel."""
+        note = VGroup(
+            *(
+                rich_text(line, font_size=18, color=WHITE)  # as captions
+                for line in text.split("\n")
+            )
+        ).arrange(DOWN, buff=0.12)
+        return note.move_to(RIGHT * SIDE_X + UP * FOOTNOTE_Y)
 
     def caption_time_at(self, index: int) -> float:
         """When the current caption's narration reaches the INDEXth character
