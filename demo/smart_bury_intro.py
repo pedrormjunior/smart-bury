@@ -496,7 +496,7 @@ class SmartBuryIntro(Scene):
                     level = max(
                         level, math.sin(math.pi * elapsed / PULSE_TIME)
                     )
-            pulse.set_width(box[0].width * (1 + 0.2 * level))
+            pulse.scale_to_fit_width(box[0].width * (1 + 0.2 * level))
             pulse.move_to(box[0]).set_opacity(1.0 if level > 0 else 0.0)
 
         return update
