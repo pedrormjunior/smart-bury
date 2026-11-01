@@ -1748,6 +1748,9 @@ class SmartBuryIntro(Scene):
         """C-x 3 arms the repeat map, so `_' right away fills the selected
         window with another buffer; the initial buffer, still shown in the
         right window, keeps its place in the sequence."""
+        # A pause in the voice, as this is a new topic.
+        self.finish_speech()
+        self.wait(1)
         # The footnote stays through the next caption too.
         see_note = "^ See {smart-bury-repeatable-commands}"
         self.split_window_right(
