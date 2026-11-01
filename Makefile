@@ -1,5 +1,5 @@
 .PHONY: test compile checkdoc package-lint demo-check demo-preview	\
-	demo intro-check intro intro-part intro-thumbnail		\
+	demo intro-check intro intro-part intro-thumbnail intro-play	\
 	intro-narration voice-models voice-model-timed			\
 	voice-model-check voice-model-clean voice-samples		\
 	test-interactively test-emacs-defaults-interactively
@@ -43,6 +43,7 @@ package-lint:
 demo-check:
 	cd demo && uv run python smart_bury_sim.py
 	cd demo && uv run python translations.py
+	cd demo && uv run python dub.py
 
 # Fast, low-quality render (480p15) into
 # demo/smart-bury-demo-preview.mp4.
@@ -95,7 +96,9 @@ INTRO_LOUDNESS = -14
 # .ttml, and their translations (demo/translations.py) next to them,
 # e.g. demo/smart-bury-intro-INTRO_QUALITY.pt-BR.ttml.  The narration
 # is raised to INTRO_LOUDNESS with ffmpeg, the video stream being
-# copied as is.
+# copied as is.  A narrated render also gets a dubbed audio track per
+# translation (demo/dub.py), e.g.
+# demo/smart-bury-intro-INTRO_QUALITY.pt-BR.wav.
 INTRO_OUTPUT = demo/media/videos/smart_bury_intro/$(INTRO_QUALITY)/smart-bury-intro
 intro: demo-check $(if $(VOICE),voice-models voice-model-timed)
 	@test -n "$(MANIM_QUALITY_$(INTRO_QUALITY))" || \
@@ -112,6 +115,8 @@ intro: demo-check $(if $(VOICE),voice-models voice-model-timed)
 	for file in demo/media/subtitles/smart-bury-intro*; do \
 	  cp $$file demo/smart-bury-intro-$(INTRO_QUALITY)$${file##*smart-bury-intro}; \
 	done
+	$(if $(VOICE),cd demo && uv run python dub.py \
+	  smart-bury-intro-$(INTRO_QUALITY) --loudness=$(INTRO_LOUDNESS))
 
 # A frame of demo/smart-bury-intro-INTRO_QUALITY.mp4, already
 # rendered, as a thumbnail for YouTube, which recommends 1280x720, in
@@ -126,6 +131,19 @@ intro-thumbnail:
 	ffmpeg -y -loglevel error -ss $(THUMBNAIL_TIME) \
 	  -i demo/smart-bury-intro-$(INTRO_QUALITY).mp4 -frames:v 1 \
 	  -vf scale=1280:720 demo/smart-bury-intro-thumbnail.png
+
+# Play demo/smart-bury-intro-INTRO_QUALITY.mp4 in mpv with its dubbed
+# audio tracks: `#' cycles through them, in the order of
+# INTRO_DUB_LANGUAGES, after the video's own English one.  Starts on
+# track AID, e.g. make intro-play AID=2 for Portuguese.
+INTRO_DUB_LANGUAGES = pt-BR es it
+AID = 1
+intro-play:
+	@test -f demo/smart-bury-intro-$(INTRO_QUALITY).mp4 || \
+	  { echo "no $(INTRO_QUALITY) render: run make intro first"; exit 1; }
+	mpv --aid=$(AID) $(foreach language,$(INTRO_DUB_LANGUAGES), \
+	  --audio-file=demo/smart-bury-intro-$(INTRO_QUALITY).$(language).wav) \
+	  demo/smart-bury-intro-$(INTRO_QUALITY).mp4
 
 # Per caption, how long its part of the intro lasts without narration,
 # how long its speech in VOICE lasts, and the difference (positive:

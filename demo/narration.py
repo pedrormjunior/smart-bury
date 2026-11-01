@@ -90,28 +90,31 @@ KEY_NAMES = {
 }
 
 
-def spoken_key(key: str) -> str:
-    """How to say KEY, e.g. "M--" -> "meta minus"."""
+def spoken_key(key: str, names: dict = KEY_NAMES) -> str:
+    """How to say KEY, e.g. "M--" -> "meta minus", with NAMES for its last
+    part.
+
+    """
     words = []
     while len(key) > 2 and key[1] == "-" and key[0] in MODIFIERS:
         words.append(MODIFIERS[key[0]])
         key = key[2:]
-    words.append(KEY_NAMES.get(key, key))
+    words.append(names.get(key, key))
     return " ".join(words)
 
 
-def spoken_keys(keys: list[str]) -> str:
+def spoken_keys(keys: list[str], names: dict = KEY_NAMES) -> str:
     """How to say the key sequence KEYS: commas between keys, but "plus" before
     a digit, e.g. ["C-x", "3"] -> "control x plus three".
 
     """
-    words = spoken_key(keys[0])
+    words = spoken_key(keys[0], names)
     for key in keys[1:]:
-        words += (", " if key.isdigit() else ", ") + spoken_key(key)
+        words += (", " if key.isdigit() else ", ") + spoken_key(key, names)
     return words
 
 
-def spoken(text: str) -> str:
+def spoken(text: str, names: dict = KEY_NAMES) -> str:
     """The words to say for caption TEXT, in the intro's markup.
 
     Keys are named, in double quotes, which make Kokoro say them as a unit, a
@@ -120,14 +123,14 @@ def spoken(text: str) -> str:
     ({smart-bury-mode}, |quit-window|) lose their hyphens; italics (~other
     buffer~) are plain; footnote markers (^) go.  Buffer names stay in their
     double quotes ("A"), which make Kokoro say the letter rather than the
-    article "a".
+    article "a".  NAMES says the keys, for other languages than English.
 
     """
     # A footnote marker (^) right after a key doesn't break a sequence.
     text = re.sub(
         r"`[^`]*`\^?(?:\s+`[^`]*`\^?)*",
         lambda m: '"'
-        + spoken_keys(re.sub(r"[`^]", " ", m.group(0)).split())
+        + spoken_keys(re.sub(r"[`^]", " ", m.group(0)).split(), names)
         + '"',
         text,
     )
@@ -139,8 +142,26 @@ def spoken(text: str) -> str:
     return text.replace("~", "").replace("^", "")
 
 
+def phonemes_with(words: str, fixed: dict, phonemize) -> str:
+    """WORDS' phonemes from PHONEMIZE, except the words in FIXED, whatever
+    their case, which take FIXED's phonemes.
+
+    """
+    if not fixed:
+        return phonemize(words)
+    names = "|".join(fixed)
+    parts = re.split(rf"\b({names})\b", words, flags=re.IGNORECASE)
+    phonemes = [
+        fixed[part.lower()] if index % 2 else phonemize(part.strip())
+        for index, part in enumerate(parts)
+        if part.strip()
+    ]
+    return re.sub(r" ([,.;:!?…])", r"\1", " ".join(phonemes))
+
+
 class Narrator:
-    """Speaks captions in VOICE at SPEED, caching each clip.
+    """Speaks captions in VOICE at SPEED, in LANG, caching each clip, saying
+    the words in FIXED with its phonemes (see `phonemes_with').
 
     With a model reporting durations (see MODEL), synthesis is continuous,
     keeping the intonation flowing across the chunks a text is split into, and
@@ -148,9 +169,17 @@ class Narrator:
 
     """
 
-    def __init__(self, voice: str, speed: float = 1.0) -> None:
+    def __init__(
+        self,
+        voice: str,
+        speed: float = 1.0,
+        lang: str = "en-us",
+        fixed: dict | None = None,
+    ) -> None:
         self.voice = voice
         self.speed = speed
+        self.lang = lang
+        self.fixed = fixed or {}
         self._kokoro = None
         self._style = None
         self.timed = False  # whether the model reports durations
@@ -191,11 +220,18 @@ class Narrator:
 
         """
         kokoro = self.kokoro()
+        if self.fixed:
+            words = phonemes_with(
+                words,
+                self.fixed,
+                lambda part: kokoro.tokenizer.phonemize(part, self.lang),
+            )
         return kokoro.create_timed(
             words,
             voice=self.style(),
             speed=self.speed,
-            lang="en-us",
+            lang=self.lang,
+            is_phonemes=bool(self.fixed),
             continuous=self.timed,
             sentence_pause=SENTENCE_PAUSE,
             clause_pause=CLAUSE_PAUSE,
@@ -215,6 +251,8 @@ class Narrator:
             f"{MODEL.name}|{self.voice}|{self.speed}|"
             f"{SENTENCE_PAUSE}|{CLAUSE_PAUSE}|{words}"
         )
+        if self.lang != "en-us":  # English clips keep their cached names
+            key += f"|{self.lang}|{sorted(self.fixed.items())}"
         path = CACHE / f"{hashlib.sha1(key.encode()).hexdigest()}.wav"
         timings_path = path.with_suffix(".json")
         if not path.exists():

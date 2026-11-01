@@ -18,6 +18,7 @@ smart_bury_demo.py.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import random
@@ -392,6 +393,8 @@ class SmartBuryIntro(Scene):
         self.subtitle: tuple[str, float] | None = None
         # Each caption's markup, start, and end, for `write_ttml'.
         self.ttml_cues: list[tuple[str, float, float]] = []
+        # Each caption's markup and when its speech starts, for dub.py.
+        self.speech_cues: list[tuple[str, float]] = []
 
         sections = [
             ("Title", self.title_card),
@@ -428,6 +431,7 @@ class SmartBuryIntro(Scene):
         self.report_narration()
         self.write_ttml()
         self.write_srt()
+        self.write_speech_cues()
 
     # Building blocks
 
@@ -750,6 +754,7 @@ class SmartBuryIntro(Scene):
             # came from Manim's cache, whose skipping state lasts until the
             # next animation starts.
             self.renderer.file_writer.add_sound(str(path), self.caption_start)
+            self.speech_cues.append((text, self.caption_start))
             # The next caption may start as soon as the last word ends, rather
             # than the clip's trailing silence.
             length = Narrator.spoken_length(duration, timings)
@@ -1961,6 +1966,16 @@ class SmartBuryIntro(Scene):
                     "",
                 ]
             self.write_subtitle_file(f".{language}.srt", lines[:-1])
+
+    def write_speech_cues(self) -> None:
+        """Write when each caption's speech starts and how long the video
+        lasts into MEDIA_DIR/dub/cues.json, for dub.py."""
+        path = Path(config.media_dir) / "dub"
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "cues.json").write_text(
+            json.dumps({"duration": self.time, "cues": self.speech_cues}),
+            encoding="utf-8",
+        )
 
     def write_subtitle_file(self, suffix: str, lines: list[str]) -> None:
         """Write LINES into MEDIA_DIR/subtitles/smart-bury-introSUFFIX."""

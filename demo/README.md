@@ -47,7 +47,13 @@ TTML, unlike SRT, but ignores fonts and backgrounds, so keys also get a
 color of their own; mpv can't read TTML).  Next to them are their
 translations from `demo/translations.py`, in Brazilian Portuguese,
 Spanish, and Italian, e.g. `demo/smart-bury-intro-<quality>.pt-BR.ttml`
-and `.pt-BR.srt`, with the English timing.  A narrated video has its audio raised
+and `.pt-BR.srt`, with the English timing.  A narrated render also gets
+a dubbed audio track per translation, e.g.
+`demo/smart-bury-intro-<quality>.pt-BR.wav`, as long as the video and at
+`INTRO_LOUDNESS`, for YouTube's multi-language audio (`demo/dub.py`):
+each caption's translation starts where its English speech does, or
+right after the previous one if that runs late, so the on-screen key
+presses and captions keep the English timing.  A narrated video has its audio raised
 with ffmpeg to `INTRO_LOUDNESS` in the Makefile, -14 LUFS, about what
 YouTube aims for, its video stream copied as is.  The
 render's log ends with, per caption, how long its part lasts without

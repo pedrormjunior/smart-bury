@@ -19,6 +19,57 @@ from pathlib import Path
 # Subtitles' languages, as BCP 47 tags, in the order of TRANSLATIONS' values.
 LANGUAGES = ("pt-BR", "es", "it")
 
+# Each language's Kokoro voice and espeak-ng language, for its dub (see
+# dub.py), and how to say the keys the captions name.
+DUB_VOICES = {
+    # "pt-BR": ("pm_alex:0.75,pm_santa:0.25", "pt-br"),
+    "pt-BR": ("pm_alex:0.75,pf_dora:0.25", "pt-br"),
+    "es": ("em_alex", "es"),
+    "it": ("im_nicola:0.75,if_sara:0.25", "it"),
+}
+KEY_WORDS = {
+    "pt-BR": {"_": "subtraço", "-": "menos", "RET": "enter", "3": "três"},
+    "es": {"_": "guion bajo", "-": "menos", "RET": "intro", "3": "tres"},
+    "it": {"_": "trattino basso", "-": "meno", "RET": "invio", "3": "tre"},
+}
+
+# How the English voice says the words that stay in English.
+ENGLISH_PHONEMES = {
+    "smart": "smˈɑːɹt",
+    "bury": "bˈɛɹi",
+    "repeat": "ɹᵻpˈiːt",
+    "map": "mˈæp",
+    "mode": "mˈoʊd",
+    "quit": "kwˈɪt",
+    "window": "wˈɪndoʊ",
+    "kill": "kˈɪl",
+    "current": "kˈɜːɹənt",
+    "buffer": "bˈʌfɚ",
+    "buffers": "bˈʌfɚz",
+}
+
+# Words a language's voice mispronounces, with the phonemes to say instead,
+# for its dub only.
+SPOKEN_PHONEMES = {
+    "pt-BR": ENGLISH_PHONEMES,
+    "it": ENGLISH_PHONEMES,
+    "es": {
+        word: ENGLISH_PHONEMES[word]
+        for word in (
+            "smart",
+            "bury",
+            "quit",
+            "window",
+            "kill",
+            "current",
+            "buffer",
+            "repeat",
+            "map",
+            "mode",
+        )
+    },
+}
+
 # Each caption, with its markup, and its translations into LANGUAGES.
 TRANSLATIONS = {
     (
@@ -75,12 +126,12 @@ TRANSLATIONS = {
     "which, once wrapped, continue the same ~smart sequence~.": (
         (
             "que, depois de encapsulados, continuam a mesma ~sequência "
-            "inteligente~."
+            "smart~."
         ),
-        "que, una vez envueltos, continúan la misma ~secuencia inteligente~.",
+        "que, una vez envueltos, continúan la misma ~secuencia smart~.",
         (
             "che, una volta incapsulati, proseguono la stessa ~sequenza "
-            "intelligente~."
+            "smart~."
         ),
     ),
     "Emacs keeps a “list of all buffers”.": (
@@ -167,7 +218,7 @@ TRANSLATIONS = {
         ),
     ),
     'Past the last buffer, it wraps around to "A".': (
-        'Depois do último buffer, volta-se ao início, em "A".',
+        'Depois do último buffer, volta ao início, em "A".',
         'Tras el último búfer, vuelve al principio, a "A".',
         'Dopo l’ultimo buffer, ricomincia da "A".',
     ),
@@ -309,6 +360,12 @@ def problems(captions: dict, source: set[str]) -> list[str]:
                 found.append(f"markup differs in {language}: {text}")
             if text.count("~") % 2:
                 found.append(f"unbalanced italics in {language}: {text}")
+            for keys in re.findall(r"`([^`]*)`", text):
+                for key in keys.split():
+                    name = key.rsplit("-", 1)[-1] or "-"
+                    if len(name) > 1 or not name.isalpha():
+                        if name not in KEY_WORDS[language]:
+                            found.append(f"unnamed {key} in {language}")
     return found
 
 
