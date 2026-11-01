@@ -66,11 +66,11 @@ intro-check: demo-check
 
 # Quality of `make intro' (resolution and frame rate): uncomment one
 # line, or pass it, e.g. make intro INTRO_QUALITY=1440p60.
-INTRO_QUALITY = 480p15
+# INTRO_QUALITY = 480p15
 # INTRO_QUALITY = 720p30
 # INTRO_QUALITY = 1080p60
 # INTRO_QUALITY = 1440p60
-# INTRO_QUALITY = 2160p60
+INTRO_QUALITY = 2160p60
 
 # Manim's --quality flag for each, which also names the folder Manim
 # renders into.

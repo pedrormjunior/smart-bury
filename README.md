@@ -10,6 +10,8 @@ immediately bury `B`, it takes us straight to `C` instead of coming
 back to `A` — `B` was simply on the way (see [Why is it
 “smart”?](#why-is-it-smart)).
 
+[![Smart Bury: Switch Through Emacs Buffers, Keep the Important Ones](https://img.youtube.com/vi/JHoY-sP7QqE/maxresdefault.jpg)](https://youtu.be/JHoY-sP7QqE)
+
 ## Motivation
 
 The interactive function `bury-buffer` comes with Emacs but is not
