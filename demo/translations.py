@@ -167,7 +167,7 @@ TRANSLATIONS = {
         ),
     ),
     'Past the last buffer, it wraps around to "A".': (
-        'Depois do último buffer, ela volta ao início, em "A".',
+        'Depois do último buffer, volta-se ao início, em "A".',
         'Tras el último búfer, vuelve al principio, a "A".',
         'Dopo l’ultimo buffer, ricomincia da "A".',
     ),
@@ -248,9 +248,9 @@ TRANSLATIONS = {
         'Un altro `_` arriva a "D", lasciando "C" vicino alla cima per dopo.',
     ),
     "`C-x 3`^ splits the window and arms the repeat map.": (
-        "`C-x 3`^ divide a janela e ativa o repeat map.",
-        "`C-x 3`^ divide la ventana y activa el repeat map.",
-        "`C-x 3`^ divide la finestra e attiva la repeat map.",
+        "`C-x 3`^ divide a janela e ativa o ~repeat map~.",
+        "`C-x 3`^ divide la ventana y activa el ~repeat map~.",
+        "`C-x 3`^ divide la finestra e attiva la ~repeat map~.",
     ),
     'So `_` right away shows "A"…': (
         'Assim, `_` logo em seguida mostra "A"…',
@@ -307,8 +307,8 @@ def problems(captions: dict, source: set[str]) -> list[str]:
                 MARKUP.findall(caption)
             ):
                 found.append(f"markup differs in {language}: {text}")
-            if text.count("~") != caption.count("~"):
-                found.append(f"italics differ in {language}: {text}")
+            if text.count("~") % 2:
+                found.append(f"unbalanced italics in {language}: {text}")
     return found
 
 
