@@ -323,7 +323,7 @@ Call `bury-buffer' passing BUFFER-OR-NAME to it and switch smartly to
 the next buffer.
 
 For more documentation, see `bury-buffer'."
-  (interactive "P")
+  (interactive)
   (smart-bury--run-function 'bury-buffer buffer-or-name)
   (smart-bury--report "%s" (smart-bury--position smart-bury--counter)))
 

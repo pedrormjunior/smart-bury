@@ -227,6 +227,18 @@ without cycling through anything else yet."
         (should (eq smart-bury--initial-buffer (current-buffer)))
         (should (= smart-bury--counter 1))))))
 
+(ert-deftest smart-bury-test-bury-buffer-ignores-prefix-arg ()
+  "A prefix argument to `smart-bury-bury-buffer' is ignored, as by
+`bury-buffer', rather than passed to it as BUFFER-OR-NAME."
+  (smart-bury-test-with-buffers ((a "sb-a") (b "sb-b"))
+    (switch-to-buffer a)
+    (smart-bury-test-with-buffer-list (list a b)
+      (let ((last-command 'some-other-command)
+            (current-prefix-arg '(4)))
+        (call-interactively #'smart-bury-bury-buffer)
+        (should-not (eq (current-buffer) a))
+        (should (eq smart-bury--initial-buffer (current-buffer)))))))
+
 (ert-deftest smart-bury-test-bury-buffer-repeated-calls-track-initial-buffer ()
   "A second, immediately-following call keeps the initial-buffer and
 counter bookkeeping consistent with wherever `bury-buffer' actually
