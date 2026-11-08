@@ -252,6 +252,17 @@ removed from the list or when `smart-bury-mode` is disabled.  As with
 wrapped commands, a command may be listed before the package defining
 it is loaded.
 
+### Adding commands by key
+
+To add a command without looking up its name, `M-x
+smart-bury-add-command` waits for a key press, as `C-h k`
+(`describe-key`) does, and asks whether to add the command that key
+runs to `smart-bury-repeatable-commands` (`r`) or to
+`smart-bury-wrapped-commands` (`w`).  It then asks whether to save
+that list for future sessions, through Customize (i.e., into
+`custom-file`); otherwise, the change lasts for the current session
+only.
+
 ### Repeat map
 
 `smart-bury-repeat-map` can be extended so that, when the *repeat map*

@@ -632,7 +632,8 @@ While `smart-bury-mode' is on, the `repeat-map' and `repeat-check-key'
 properties of each command are replaced, and they are restored when the
 mode is turned off or the command removed from this list.  A command may
 be listed before the package defining it is loaded.  Setting this
-variable (e.g. via `setopt' or Customize) takes effect immediately."
+variable (e.g. via `setopt' or Customize) takes effect immediately.
+\\[smart-bury-add-command] adds the command run by a key."
   :type '(repeat (symbol :tag "Command"))
   :group 'smart-bury
   :set #'smart-bury--set-repeatable-commands)
@@ -667,10 +668,108 @@ commands and keeps `smart-bury--commands', `smart-bury-mode-map', and
 `smart-bury-repeat-map' in sync.
 
 A command may be listed before the package defining it is loaded: its
-wrapper only needs it when called."
+wrapper only needs it when called.  \\[smart-bury-add-command] adds the
+command run by a key."
   :type '(repeat (symbol :tag "Command"))
   :group 'smart-bury
   :set #'smart-bury--set-wrapped-commands)
+
+(defun smart-bury--read-command-to-add ()
+  "Read the arguments of `smart-bury-add-command'.
+Read a key, as `describe-key' does, and return a list of the command it
+runs, the option to add it to, and whether to save that option once the
+command is added.  The command is the key's binding in the current
+buffer after remapping, since that is the one that runs (e.g., with
+`smart-bury-mode' on, a key bound to `quit-window' runs
+`smart-bury-quit-window') and that `repeat-mode' sees.
+
+Signal a `user-error' unless the command is a named one, neither a Smart
+Bury command nor in either option already.  Ask whether to add it to
+`smart-bury-repeatable-commands' or `smart-bury-wrapped-commands' and,
+for the former, if the command has a repeat map of its own, which it
+loses while listed, whether to replace it."
+  (let* ((key (read-key-sequence-vector "Key whose command to add: "))
+         (command (key-binding key t)))
+    (cond
+     ((memq command '(nil undefined))
+      (user-error "%s is undefined" (key-description key)))
+     ((not (and (symbolp command) (commandp command)))
+      (user-error "%s does not run a named command" (key-description key)))
+     ((memq command smart-bury--commands)
+      (user-error "`%s' is a Smart Bury command" command)))
+    (dolist (option '(smart-bury-repeatable-commands
+                      smart-bury-wrapped-commands))
+      (when (memq command (symbol-value option))
+        (user-error "`%s' is in `%s' already" command option)))
+    (let ((option
+           (if (eq (car (read-multiple-choice
+                         (format-message "Add `%s' as" command)
+                         '((?r "repeatable" "Keep its own behavior and only \
+arm the repeat map; for a command keeping the current buffer")
+                           (?w "wrapped" "Run its Smart Bury wrapper \
+instead, taking part in sequences; for a command getting rid of the \
+current buffer"))))
+                   ?w)
+               'smart-bury-wrapped-commands
+             'smart-bury-repeatable-commands))
+          (own-map (get command 'repeat-map)))
+      (when (and (eq option 'smart-bury-repeatable-commands)
+                 own-map
+                 (not (eq own-map 'smart-bury-repeat-map))
+                 (not (y-or-n-p
+                       (format-message
+                        "`%s' has repeat map `%s' of its own; replace it? "
+                        command own-map))))
+        (user-error "`%s' not added" command))
+      (list command
+            option
+            (y-or-n-p (format-message "Save `%s' for future sessions? "
+                                      option))))))
+
+;;;###autoload
+(defun smart-bury-add-command (command option &optional save)
+  "Add COMMAND to OPTION, saving OPTION for future sessions if SAVE.
+OPTION is either `smart-bury-repeatable-commands' or
+`smart-bury-wrapped-commands'.  Interactively, read a key, as
+`describe-key' does, then ask which option to add the command it runs
+to, and whether to save it (see `smart-bury--read-command-to-add').
+
+OPTION is set with `customize-set-variable', so the change takes effect
+immediately, or, when saving, with `customize-save-variable', which also
+writes its whole value to `custom-file'.  If the init file sets OPTION
+too (e.g. with `setopt'), whichever is evaluated last at startup wins."
+  (interactive (smart-bury--read-command-to-add))
+  (unless (memq option '(smart-bury-repeatable-commands
+                         smart-bury-wrapped-commands))
+    (error "`%s' is not a Smart Bury list of commands" option))
+  (let* ((old (symbol-value option))
+         (value (if (memq command old) old (append old (list command))))
+         (wrapped (eq option 'smart-bury-wrapped-commands))
+         ;; A wrapper takes part in sequences without `repeat-mode'.
+         (missing (cond ((not smart-bury-mode) 'smart-bury-mode)
+                        ((and (not wrapped)
+                              (not (bound-and-true-p repeat-mode)))
+                         'repeat-mode))))
+    (if save
+        (customize-save-variable option value)
+      (customize-set-variable option value))
+    (when (called-interactively-p 'interactive)
+      (smart-bury--message
+       (format-message "`%s' %s%s (%s)"
+                       command
+                       (cond (wrapped
+                              (format-message "%s remapped to `%s'"
+                                              (if missing "will be" "is now")
+                                              (smart-bury--wrapper-name
+                                               command)))
+                             (missing (format-message
+                                       "will arm `smart-bury-repeat-map'"))
+                             (t (format-message
+                                 "now arms `smart-bury-repeat-map'")))
+                       (if missing
+                           (format-message " once `%s' is on" missing)
+                         "")
+                       (if save "saved" "this session only"))))))
 
 (provide 'smart-bury)
 

@@ -1127,6 +1127,173 @@ with a warning, while the other entries are still made repeatable."
           (should-not (get '+ 'repeat-map))
           (should (eq (get cmd 'repeat-map) 'smart-bury-repeat-map)))))))
 
+;;; `smart-bury-add-command'
+
+(defun smart-bury-test-make-command (name)
+  "Return a new uninterned interactive command named NAME."
+  (let ((command (make-symbol name)))
+    (fset command (lambda () (interactive)))
+    command))
+
+(defun smart-bury-test-read-command-to-add (bindings key &rest answers)
+  "Return what `smart-bury--read-command-to-add' reads for KEY.
+Read it in a buffer whose local keymap has BINDINGS, a list of (KEY
+. DEFINITION), answering the questions with ANSWERS, in order: a
+character for `read-multiple-choice', a boolean for `y-or-n-p'.  Signal
+an error on any further question."
+  (let ((map (make-sparse-keymap)))
+    (dolist (binding bindings)
+      (define-key map (car binding) (cdr binding)))
+    (cl-flet ((answer (prompt)
+                (if answers
+                    (pop answers)
+                  (error "Unexpected question: %s" prompt))))
+      (with-temp-buffer
+        (use-local-map map)
+        (cl-letf (((symbol-function 'read-key-sequence-vector)
+                   (lambda (&rest _) key))
+                  ((symbol-function 'read-multiple-choice)
+                   (lambda (prompt choices &rest _)
+                     (assq (answer prompt) choices)))
+                  ((symbol-function 'y-or-n-p) #'answer))
+          (smart-bury--read-command-to-add))))))
+
+(ert-deftest smart-bury-test-add-command-reads-key ()
+  "The command read is the one the key runs in the current buffer, after
+remapping, along with the option chosen and whether to save it."
+  (let ((cmd (smart-bury-test-make-command "sb-cmd"))
+        (remapped (smart-bury-test-make-command "sb-remapped")))
+    (should (equal (smart-bury-test-read-command-to-add
+                    `(([?\C-c ?z] . ,cmd)) [?\C-c ?z] ?r t)
+                   (list cmd 'smart-bury-repeatable-commands t)))
+    (should (equal (smart-bury-test-read-command-to-add
+                    `(([?\C-c ?z] . ,cmd)) [?\C-c ?z] ?w nil)
+                   (list cmd 'smart-bury-wrapped-commands nil)))
+    (should (equal (smart-bury-test-read-command-to-add
+                    `(([?\C-c ?z] . ,cmd) ([remap ,cmd] . ,remapped))
+                    [?\C-c ?z] ?r t)
+                   (list remapped 'smart-bury-repeatable-commands t)))))
+
+(ert-deftest smart-bury-test-add-command-rejects-key ()
+  "A key that is undefined, runs an anonymous command or a Smart Bury
+one, or runs a command in either option already is rejected, without
+asking anything."
+  (let ((cmd (smart-bury-test-make-command "sb-cmd")))
+    (dolist (definition (list nil 'undefined (lambda () (interactive))
+                              'smart-bury-bury-buffer))
+      (should-error (smart-bury-test-read-command-to-add
+                     `(([?\C-c ?z] . ,definition)) [?\C-c ?z])
+                    :type 'user-error))
+    (smart-bury-test-with-wrapped-commands '(quit-window)
+      (should-error (smart-bury-test-read-command-to-add
+                     '(([?\C-c ?z] . quit-window)) [?\C-c ?z])
+                    :type 'user-error))
+    (smart-bury-test-with-repeatable-commands (list cmd)
+      (should-error (smart-bury-test-read-command-to-add
+                     `(([?\C-c ?z] . ,cmd)) [?\C-c ?z])
+                    :type 'user-error))))
+
+(ert-deftest smart-bury-test-add-command-own-repeat-map ()
+  "Before replacing a command's own repeat map, ask whether to; declining
+adds nothing, without asking whether to save.  Wrapping the command
+leaves its repeat map alone, so that question is not asked then."
+  (let ((cmd (smart-bury-test-make-command "sb-cmd")))
+    (put cmd 'repeat-map 'sb-own-map)
+    (should-error (smart-bury-test-read-command-to-add
+                   `(([?\C-c ?z] . ,cmd)) [?\C-c ?z] ?r nil)
+                  :type 'user-error)
+    (should (equal (smart-bury-test-read-command-to-add
+                    `(([?\C-c ?z] . ,cmd)) [?\C-c ?z] ?r t nil)
+                   (list cmd 'smart-bury-repeatable-commands nil)))
+    (should (equal (smart-bury-test-read-command-to-add
+                    `(([?\C-c ?z] . ,cmd)) [?\C-c ?z] ?w nil)
+                   (list cmd 'smart-bury-wrapped-commands nil)))))
+
+(ert-deftest smart-bury-test-add-command-repeatable-for-session ()
+  "Without SAVE, the command is appended to
+`smart-bury-repeatable-commands', once, and arms the repeat map right
+away, without saving anything."
+  (let ((cmd (smart-bury-test-make-command "sb-cmd"))
+        (other (make-symbol "sb-other")))
+    (cl-letf (((symbol-function 'customize-save-variable)
+               (lambda (&rest _) (error "Saved"))))
+      (smart-bury-test-with-mode
+        (smart-bury-test-with-repeatable-commands (list other)
+          (smart-bury-add-command cmd 'smart-bury-repeatable-commands)
+          (smart-bury-add-command cmd 'smart-bury-repeatable-commands)
+          (should (equal smart-bury-repeatable-commands (list other cmd)))
+          (should (eq (get cmd 'repeat-map) 'smart-bury-repeat-map)))))))
+
+(ert-deftest smart-bury-test-add-command-wrapped ()
+  "Added to `smart-bury-wrapped-commands', the command gets a wrapper,
+which it is remapped to."
+  (cl-letf (((symbol-function 'customize-save-variable)
+             (lambda (&rest _) (error "Saved"))))
+    (smart-bury-test-with-wrapped-commands '(quit-window)
+      (smart-bury-add-command 'smart-bury-test--added-cmd
+                              'smart-bury-wrapped-commands)
+      (should (equal smart-bury-wrapped-commands
+                     '(quit-window smart-bury-test--added-cmd)))
+      (should (eq (lookup-key smart-bury-mode-map
+                              [remap smart-bury-test--added-cmd])
+                  #'smart-bury-smart-bury-test--added-cmd)))))
+
+(ert-deftest smart-bury-test-add-command-saves ()
+  "With SAVE, the new value is set with `customize-save-variable'."
+  (let ((cmd (smart-bury-test-make-command "sb-cmd"))
+        saved)
+    (cl-letf (((symbol-function 'customize-save-variable)
+               (lambda (variable value &rest _)
+                 (push (cons variable value) saved)
+                 (customize-set-variable variable value))))
+      (smart-bury-test-with-repeatable-commands nil
+        (smart-bury-add-command cmd 'smart-bury-repeatable-commands t)
+        (should (equal saved `((smart-bury-repeatable-commands ,cmd))))
+        (should (equal smart-bury-repeatable-commands (list cmd)))))))
+
+(ert-deftest smart-bury-test-add-command-rejects-other-option ()
+  "Only the two Smart Bury lists of commands can be added to."
+  (should-error (smart-bury-add-command 'ignore 'smart-bury-keys)))
+
+(ert-deftest smart-bury-test-add-command-message ()
+  "Interactively, the command reports whether the command it added is
+remapped or arms the repeat map now or once a mode is on, and whether
+it was saved."
+  (let ((cmd (smart-bury-test-make-command "sb-cmd")))
+    (cl-flet ((report (command option save)
+                (mapcar #'substring-no-properties
+                        (smart-bury-test-capturing-messages
+                          (smart-bury-add-command command option save)))))
+      (cl-letf (((symbol-function 'customize-save-variable)
+                 #'customize-set-variable))
+        (smart-bury-test-with-repeatable-commands nil
+          (smart-bury-test-with-wrapped-commands '(quit-window)
+            (let ((repeat-mode t))
+              (should (member (format-message "Smart Bury: `sb-cmd' will arm \
+`smart-bury-repeat-map' once `smart-bury-mode' is on (this session only)")
+                              (report cmd 'smart-bury-repeatable-commands nil)))
+              (should (member (format-message "Smart Bury: \
+`smart-bury-test--added-cmd' will be remapped to \
+`smart-bury-smart-bury-test--added-cmd' once `smart-bury-mode' is on \
+\(this session only)")
+                              (report 'smart-bury-test--added-cmd
+                                      'smart-bury-wrapped-commands nil)))
+              (smart-bury-test-with-mode
+                (should (member (format-message "Smart Bury: `sb-cmd' now \
+arms `smart-bury-repeat-map' (saved)")
+                                (report cmd 'smart-bury-repeatable-commands t)))
+                (let ((repeat-mode nil))
+                  (should (member (format-message "Smart Bury: `sb-cmd' will \
+arm `smart-bury-repeat-map' once `repeat-mode' is on (this session only)")
+                                  (report cmd 'smart-bury-repeatable-commands
+                                          nil)))
+                  (should (member (format-message "Smart Bury: \
+`smart-bury-test--added-cmd' is now remapped to \
+`smart-bury-smart-bury-test--added-cmd' (saved)")
+                                  (report 'smart-bury-test--added-cmd
+                                          'smart-bury-wrapped-commands
+                                          t))))))))))))
+
 (provide 'smart-bury-tests)
 
 ;;; smart-bury-tests.el ends here
