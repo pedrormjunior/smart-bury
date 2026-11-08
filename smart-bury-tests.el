@@ -832,6 +832,140 @@ to `A', and an immediate `_' then reaches `C'."
     (smart-bury-test--run #'smart-bury-switch-through-buffers)
     (should (eq (current-buffer) c))))
 
+;;; `smart-bury--bury-buffers'
+
+;; Like the README cases, these follow the real `buffer-list' order,
+;; which burying changes.  But `buffer-list' only reports the case's
+;; five buffers, so that the session's other ones (e.g. "*scratch*")
+;; never come up, e.g. once every case buffer is buried.
+
+(defmacro smart-bury-test-with-case-only (&rest body)
+  "Run BODY as in `smart-bury-test-with-case', with `buffer-list'
+reporting only the case's five buffers, in their real order."
+  (declare (indent 0))
+  `(smart-bury-test-with-case
+     (let ((real-buffer-list (symbol-function 'buffer-list)))
+       (cl-letf (((symbol-function 'buffer-list)
+                  (lambda (&optional frame)
+                    (seq-filter (lambda (buffer) (memq buffer bufs))
+                                (funcall real-buffer-list frame)))))
+         ,@body))))
+
+(defun smart-bury-test--bury (&rest buffers)
+  "Call `smart-bury--bury-buffers' on BUFFERS as a command would.
+It sees the command `smart-bury-test--run' ran last as `last-command',
+and the next command sees it as a Smart Bury one."
+  (prog1 (let ((last-command smart-bury-test--previous))
+           (smart-bury--bury-buffers buffers))
+    (setq smart-bury-test--previous 'smart-bury-bury-buffer)))
+
+(ert-deftest smart-bury-test-bury-buffers-fresh ()
+  "A fresh call buries the buffers, the current one included, at the end
+of the list, in their order, and goes to the first buffer left."
+  (smart-bury-test-with-case-only
+    (should (equal (smart-bury-test--bury c) (list a c)))
+    (should (eq (current-buffer) b))
+    (should (equal (smart-bury-test--names bufs) '("B" "D" "E" "A" "C")))
+    (should (eq smart-bury--initial-buffer b))
+    (should (= smart-bury--counter 1))))
+
+(ert-deftest smart-bury-test-bury-buffers-every-buffer ()
+  "When every buffer is buried, the order does not change: a fresh call
+stays on the current buffer, the most recent one."
+  (smart-bury-test-with-case-only
+    (apply #'smart-bury-test--bury bufs)
+    (should (eq (current-buffer) a))
+    (should (equal (smart-bury-test--names bufs) '("A" "B" "C" "D" "E")))
+    (should (= smart-bury--counter 1))))
+
+(ert-deftest smart-bury-test-bury-buffers-mid-sequence ()
+  "Mid-sequence, the buffers are buried in the sequence's order, the
+current one after those passed on the way, and the sequence goes on to
+the next buffer after the current one that is not buried."
+  (smart-bury-test-with-case-only
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers)
+    (should (eq (current-buffer) d))
+    (smart-bury-test--bury b)
+    (should (eq (current-buffer) e))
+    (should (equal (smart-bury-test--names bufs) '("E" "A" "C" "B" "D")))
+    (should (eq smart-bury--initial-buffer a))
+    (should (= smart-bury--counter 3))
+    ;; Still the same sequence: back to where it started.
+    (smart-bury-test--run #'smart-bury-switch-to-other-buffer)
+    (should (eq (current-buffer) a))))
+
+(ert-deftest smart-bury-test-bury-buffers-initial-buffer ()
+  "Burying the initial buffer makes the first buffer left on the way the
+initial one."
+  (smart-bury-test-with-case-only
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers)
+    (smart-bury-test--bury a)
+    (should (eq (current-buffer) e))
+    (should (equal (smart-bury-test--names bufs) '("E" "B" "C" "A" "D")))
+    (should (eq smart-bury--initial-buffer b))
+    (should (= smart-bury--counter 3))))
+
+(ert-deftest smart-bury-test-bury-buffers-none-left-after ()
+  "Mid-sequence, when no buffer left follows the current one, the
+sequence goes back to the first buffer left, rather than on to the
+buried ones."
+  (smart-bury-test-with-case-only
+    (smart-bury-test--run #'smart-bury-switch-through-buffers)
+    (should (eq (current-buffer) b))
+    (smart-bury-test--bury c d e)
+    (should (eq (current-buffer) a))
+    (should (equal (smart-bury-test--names bufs) '("A" "B" "C" "D" "E")))
+    (should (eq smart-bury--initial-buffer a))
+    (should (= smart-bury--counter 1))))
+
+(ert-deftest smart-bury-test-bury-buffers-every-buffer-mid-sequence ()
+  "Mid-sequence, burying every buffer goes back to the initial one,
+leaving the order unchanged."
+  (smart-bury-test-with-case-only
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers)
+    (should (eq (current-buffer) c))
+    (apply #'smart-bury-test--bury bufs)
+    (should (eq (current-buffer) a))
+    (should (equal (smart-bury-test--names bufs) '("A" "B" "C" "D" "E")))
+    (should (eq smart-bury--initial-buffer a))
+    (should (= smart-bury--counter 1))))
+
+(ert-deftest smart-bury-test-bury-buffers-counter-past-buffers ()
+  "With the counter past the eligible buffers (e.g. after killing a base
+buffer also killed its indirect ones), every buffer left was passed, so
+the sequence goes back to the first of them."
+  (smart-bury-test-with-case-only
+    (smart-bury-test--order (list c a b d e))
+    (setq smart-bury--initial-buffer a
+          smart-bury--counter 7
+          smart-bury-test--previous 'smart-bury-switch-through-buffers)
+    (smart-bury-test--bury a)
+    (should (eq (current-buffer) b))
+    (should (equal (smart-bury-test--names bufs) '("B" "D" "E" "A" "C")))
+    (should (eq smart-bury--initial-buffer b))
+    (should (= smart-bury--counter 1))))
+
+(ert-deftest smart-bury-test-switch-blocked-reason ()
+  "Smart Bury cannot switch buffers in a strongly dedicated window, where
+`switch-to-buffer' would show them in another window instead; a weakly
+dedicated one is fine."
+  (smart-bury-test-with-buffers ((a "sb-a"))
+    (switch-to-buffer a)
+    (should-not (smart-bury--switch-blocked-reason))
+    (unwind-protect
+        (progn
+          (set-window-dedicated-p nil 'weakly)
+          (should-not (smart-bury--switch-blocked-reason))
+          (set-window-dedicated-p nil t)
+          (should (equal (smart-bury--switch-blocked-reason)
+                         "dedicated window")))
+      (set-window-dedicated-p nil nil))))
+
 ;;; `smart-bury-mode'
 
 (ert-deftest smart-bury-test-mode-binds-switch-commands ()
@@ -1067,6 +1201,24 @@ other entries still get wrapped."
         (should-not (fboundp 'smart-bury-nil))
         (should (memq 'smart-bury-quit-window smart-bury--commands))))))
 
+(ert-deftest smart-bury-test-register-command ()
+  "A command registered by another Smart Bury file continues a sequence
+and arms the repeat map, even after `smart-bury-wrapped-commands'
+changes."
+  (let ((command (smart-bury-test-make-command "sb-registered")))
+    (unwind-protect
+        (progn
+          (smart-bury--register-command command)
+          (smart-bury-test-with-wrapped-commands '(quit-window)
+            (let ((last-command command))
+              (should-not (smart-bury--starts-now-p))))
+          (should (memq command smart-bury--commands))
+          (should (eq (get command 'repeat-map) 'smart-bury-repeat-map))
+          (should (eq (get command 'repeat-check-key) 'no)))
+      (setq smart-bury--extra-commands
+            (delq command smart-bury--extra-commands)
+            smart-bury--commands (delq command smart-bury--commands)))))
+
 ;;; `smart-bury-repeatable-commands'
 
 (ert-deftest smart-bury-test-repeatable-commands-arm-repeat-map-when-mode-on ()
@@ -1192,6 +1344,14 @@ asking anything."
       (should-error (smart-bury-test-read-command-to-add
                      `(([?\C-c ?z] . ,cmd)) [?\C-c ?z])
                     :type 'user-error))))
+
+(ert-deftest smart-bury-test-add-command-rejects-smart-bury-name ()
+  "A command named `smart-bury-...' is rejected even when not registered,
+e.g. one autoloaded from a Smart Bury file not loaded yet."
+  (let ((cmd (smart-bury-test-make-command "smart-bury-not-loaded-yet")))
+    (should-error (smart-bury-test-read-command-to-add
+                   `(([?\C-c ?z] . ,cmd)) [?\C-c ?z])
+                  :type 'user-error)))
 
 (ert-deftest smart-bury-test-add-command-own-repeat-map ()
   "Before replacing a command's own repeat map, ask whether to; declining

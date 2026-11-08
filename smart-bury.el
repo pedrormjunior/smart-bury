@@ -51,6 +51,10 @@
 ;; `smart-bury-wrapped-commands' (by default `quit-window' and
 ;; `kill-current-buffer'), which takes part in the same sequences.
 ;;
+;; `smart-bury-project.el' adds `smart-bury-project-bury-buffers', which
+;; buries all the buffers of the current buffer's project at once
+;; (Emacs 28 or later), taking part in the same sequences too.
+;;
 ;; To use it, enable `smart-bury-mode', and preferably `repeat-mode':
 ;;
 ;;   (smart-bury-mode 1)
@@ -75,10 +79,16 @@
 Unlike the wrappers generated from `smart-bury-wrapped-commands', they
 are defined by hand.")
 
+(defvar smart-bury--extra-commands nil
+  "Commands defined in Smart Bury's other files.
+E.g. `smart-bury-project-bury-buffers', from `smart-bury-project.el'.
+Each file registers its commands with `smart-bury--register-command'
+when loaded, so they are part of `smart-bury--commands' too.")
+
 (defvar smart-bury--commands (copy-sequence smart-bury--basic-commands)
   "Commands allowed by Smart Bury without resetting configuration.
 Extended with each wrapper generated from `smart-bury-wrapped-commands'
-whenever that variable is set.")
+whenever that variable is set, and with `smart-bury--extra-commands'.")
 
 (defvar smart-bury--counter 1
   "How many buffers deep the current Smart Bury sequence is.")
@@ -110,7 +120,10 @@ When non-nil, each command called interactively shows in the echo area
 where the current buffer is in the sequence, out of how many buffers it
 goes through, e.g. \"Smart Bury: 3/7\".  The message stays until the
 next key, which ends the sequence unless it calls a Smart Bury command,
-so the message also shows that the sequence is still going."
+so the message also shows that the sequence is still going.
+
+A command that can do nothing (e.g. `smart-bury-project-bury-buffers'
+outside a project) says why even when this option is nil."
   :type 'boolean
   :group 'smart-bury)
 
@@ -168,6 +181,13 @@ command occurred.  Return non-nil if a new sequence started."
 (defun smart-bury--is-initial-p nil
   "Check if current buffer is the initial one."
   (eq (current-buffer) smart-bury--initial-buffer))
+
+(defun smart-bury--depth nil
+  "Return how many buffers deep the current buffer is in the sequence.
+The initial buffer is 1 deep, whatever `smart-bury--counter' says (e.g.
+2, right after `smart-bury-switch-to-other-buffer' came back to it).
+Any other buffer is `smart-bury--counter' buffers deep."
+  (if (smart-bury--is-initial-p) 1 smart-bury--counter))
 
 (defun smart-bury--maybe-restart-sequence nil
   "Return non-nil if this call restarts the Smart Bury sequence.
@@ -283,6 +303,88 @@ Unless this call starts a fresh Smart Bury sequence, switch through
                         'allow-current))))
         (when was-initial
           (setq smart-bury--initial-buffer last-buf))))))
+
+(defun smart-bury--bury-buffers (buffers)
+  "Smartly bury BUFFERS and the current buffer, keeping their order.
+Put them at the end of the list of all buffers, most recent first, so
+that they keep their order there, then switch to the buffer the
+sequence reaches, as `smart-bury-bury-buffer' does for the current
+buffer alone.  Return the buffers buried, most recent first.
+
+Their order is the sequence's: the one the list of all buffers would
+have if the user had never left `smart-bury--initial-buffer', which
+walking back through the buffers passed on the way restores (see
+`smart-bury--walk-back').  The buffers passed that are buried are no
+longer on the way: the sequence goes on to the buffer left after those
+passed, and the first buffer left on the way becomes the initial one.
+When no buffer left follows them, it goes back to the first buffer left,
+rather than on to the buried ones.  When every buffer is buried, the
+order does not change, and the sequence goes back to its initial buffer,
+the most recent one."
+  (smart-bury--maybe-start-sequence)
+  (let* ((buffers (cons (current-buffer) buffers))
+         (depth (smart-bury--depth))
+         ;; Also records the current buffer, which may not be first
+         ;; (see `smart-bury--other-buffers'): it is the most recent.
+         (others (smart-bury--other-buffers))
+         (passed (and (> depth 1)
+                      (smart-bury--select-buffers others (1- depth))))
+         (kept (seq-count (lambda (buffer) (not (memq buffer buffers)))
+                          passed))
+         buried)
+    (smart-bury--walk-back passed)
+    (dolist (buffer (smart-bury--buffer-list))
+      (when (memq buffer buffers)
+        (bury-buffer-internal buffer)
+        (push buffer buried)))
+    ;; Back to the first buffer left once all of them were passed, which
+    ;; is also the case when the selection of those passed wrapped
+    ;; around, e.g. after killing a base buffer also killed its indirect
+    ;; ones: KEPT then counts some of them twice, to the same effect.
+    (setq smart-bury--counter
+          (if (< kept (seq-count (lambda (buffer)
+                                   (and (not (memq buffer buffers))
+                                        (smart-bury--eligible-p buffer t)))
+                                 (smart-bury--buffer-list)))
+              (1+ kept)
+            1))
+    (let ((selection (smart-bury--select-buffers
+                      (smart-bury--buffer-list) smart-bury--counter
+                      'allow-current)))
+      (smart-bury--walk-back (butlast selection))
+      (smart-bury--switch-to-buffer (car (last selection)))
+      (setq smart-bury--initial-buffer (car selection)))
+    (nreverse buried)))
+
+(defun smart-bury--switch-blocked-reason nil
+  "Return why Smart Bury cannot switch buffers in the selected window.
+That is the case in a minibuffer window or a strongly dedicated one,
+where `switch-to-buffer', called from Lisp, shows the buffer in another
+window instead.  Return nil when it can switch."
+  (cond ((window-minibuffer-p) "minibuffer window")
+        ((eq (window-dedicated-p) t) "dedicated window")))
+
+(defmacro smart-bury--do-nothing (reason)
+  "Make the enclosing command do nothing but report REASON.
+The command still takes part in the sequence, as one leaving the
+current buffer in its place: a fresh call starts a sequence from it, at
+position 1, so that the next Smart Bury command does not continue an
+older one; otherwise, the sequence stays as it is.
+
+Called interactively, the command reports REASON after its position,
+e.g. \"Smart Bury: 1/80 (not in a project)\", or alone when
+`smart-bury-messages' is nil: why a command did nothing is reported
+regardless.  This is a macro for the same reason as
+`smart-bury--report'."
+  `(progn
+     (when (smart-bury--maybe-start-sequence)
+       (setq smart-bury--counter 1))
+     (when (called-interactively-p 'interactive)
+       (smart-bury--message
+        (if smart-bury-messages
+            (format "%s (%s)" (smart-bury--position (smart-bury--depth))
+                    ,reason)
+          ,reason)))))
 
 (defun smart-bury-switch-through-buffers nil
   "Smartly switch to the other buffer, then further when repeated.
@@ -439,6 +541,16 @@ invoked COMMAND (see `smart-bury-repeat-map')."
   (put command 'repeat-check-key 'no))
 
 (mapc #'smart-bury--make-repeatable smart-bury--basic-commands)
+
+(defun smart-bury--register-command (command)
+  "Make COMMAND, from another Smart Bury file, a Smart Bury command.
+Add it to `smart-bury--extra-commands', so that it continues a sequence,
+see `smart-bury--starts-now-p', however `smart-bury-wrapped-commands'
+changes later, and make it repeatable, see
+`smart-bury--make-repeatable'."
+  (cl-pushnew command smart-bury--extra-commands)
+  (cl-pushnew command smart-bury--commands)
+  (smart-bury--make-repeatable command))
 
 (defun smart-bury--valid-commands (commands option)
   "Return the entries of COMMANDS that may be interactive commands.
@@ -653,6 +765,7 @@ command is skipped, with a warning (see `smart-bury--valid-commands')."
     (setq smart-bury--valid-wrapped-commands valid)
     (setq smart-bury--commands
           (append smart-bury--basic-commands
+                  smart-bury--extra-commands
                   (mapcar #'smart-bury--wrapper-name valid)))
     (dolist (fn valid)
       (smart-bury--define-wrapper fn)
@@ -684,7 +797,9 @@ buffer after remapping, since that is the one that runs (e.g., with
 `smart-bury-quit-window') and that `repeat-mode' sees.
 
 Signal a `user-error' unless the command is a named one, neither a Smart
-Bury command nor in either option already.  Ask whether to add it to
+Bury command (including any named `smart-bury-...', such as one from a
+Smart Bury file not loaded yet) nor in either option already.  Ask
+whether to add it to
 `smart-bury-repeatable-commands' or `smart-bury-wrapped-commands' and,
 for the former, if the command has a repeat map of its own, which it
 loses while listed, whether to replace it."
@@ -695,7 +810,11 @@ loses while listed, whether to replace it."
       (user-error "%s is undefined" (key-description key)))
      ((not (and (symbolp command) (commandp command)))
       (user-error "%s does not run a named command" (key-description key)))
-     ((memq command smart-bury--commands)
+     ((or (memq command smart-bury--commands)
+          ;; E.g. an autoloaded command of a Smart Bury file not loaded
+          ;; yet, which would register it (see
+          ;; `smart-bury--register-command').
+          (string-prefix-p "smart-bury-" (symbol-name command)))
       (user-error "`%s' is a Smart Bury command" command)))
     (dolist (option '(smart-bury-repeatable-commands
                       smart-bury-wrapped-commands))
