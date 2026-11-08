@@ -5,13 +5,15 @@
 	test-interactively test-emacs-defaults-interactively
 
 test:
-	emacs -batch -l ert -l smart-bury.el -l smart-bury-tests.el \
+	emacs -batch -l ert -l smart-bury.el -l smart-bury-project.el \
+	  -l smart-bury-tests.el -l smart-bury-project-tests.el \
 	  -f ert-run-tests-batch-and-exit
 
+# -L .: smart-bury-project.el requires smart-bury.
 compile:
-	emacs -batch --eval "(setq byte-compile-error-on-warn t)" \
-	  -f batch-byte-compile smart-bury.el
-	rm -f smart-bury.elc
+	emacs -batch -L . --eval "(setq byte-compile-error-on-warn t)" \
+	  -f batch-byte-compile smart-bury.el smart-bury-project.el
+	rm -f smart-bury.elc smart-bury-project.elc
 
 checkdoc:
 	emacs -batch -l checkdoc --eval \
@@ -20,10 +22,13 @@ checkdoc:
 	          (advice-add 'display-warning :before \
 	                      (lambda (&rest _) (setq warnings (1+ warnings)))) \
 	          (checkdoc-file \"smart-bury.el\") \
+	          (checkdoc-file \"smart-bury-project.el\") \
 	          (kill-emacs (min warnings 1)))"
 
 # Uses package-lint from the user's installed packages when available;
 # otherwise (e.g. in CI) installs it from MELPA into a local .elpa/.
+# smart-bury.el is the package's main file: the other files are linted
+# as part of its package, not as packages of their own.
 package-lint:
 	emacs -batch --eval \
 	  "(progn (package-initialize) \
@@ -35,7 +40,8 @@ package-lint:
 	            (package-refresh-contents) \
 	            (package-install 'package-lint) \
 	            (require 'package-lint)))" \
-	  -f package-lint-batch-and-exit smart-bury.el
+	  --eval "(setq package-lint-main-file \"smart-bury.el\")" \
+	  -f package-lint-batch-and-exit smart-bury.el smart-bury-project.el
 
 # The demo animation lives in demo/, a separate uv project (see
 # demo/pyproject.toml).  demo-check replays the README cases on the
@@ -203,8 +209,10 @@ voice-model-clean:
 voice-samples: voice-models
 	cd demo && uv run python narration.py --samples
 
+# Started from $HOME, outside this repository's project, so that only
+# the package's files opened by test-interactively.el belong to it.
 test-interactively:
-	emacs -Q -L . -l smart-bury -l $@
+	cd "$$HOME" && emacs -Q -L "$(CURDIR)" -l smart-bury -l "$(CURDIR)/$@"
 
 test-emacs-defaults-interactively:
 	emacs -Q -L . -l $@

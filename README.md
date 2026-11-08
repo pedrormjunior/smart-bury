@@ -69,6 +69,10 @@ The two other functions, handled by default, are `quit-window` and
 `smart-bury-quit-window` and `smart-bury-kill-current-buffer`, which
 take part in the same “smart” sequences.
 
+Besides, `smart-bury-project.el` provides
+`smart-bury-project-bury-buffers`, which buries all the buffers of a
+project at once (see [Burying a project](#burying-a-project)).
+
 ## Setup
 
 Smart Bury requires Emacs 27.1 or later.  With `smart-bury.el` in a
@@ -160,6 +164,51 @@ back to where we were: usually `B` is simply on the way to another
 buffer.  But if we stop and work on `B` and later bury it, then we go
 back to `A` as normal; and if `C` is intended instead, one extra `_`
 suffices to get us there.
+
+## Burying a project
+
+`smart-bury-project.el` provides `smart-bury-project-bury-buffers`,
+which buries all the buffers of the current buffer’s project at once
+and switches to the next buffer outside the project.  The project’s
+buffers are those `project.el` reports (`project-buffers`, Emacs 28 or
+later), i.e., the buffers whose `default-directory` is in the project:
+not only those visiting its files, but also, e.g., its *Dired*,
+*compilation*, or shell buffers, or a `*Help*` buffer opened from one
+of them.
+
+The buried buffers keep their order at the end of the “list of all
+buffers”: although we bury the project, its most recent buffers are
+still its most important ones, the first we come back to.  The function
+takes part in the same sequences as the others: e.g., if the list is
+`A B C D E … Z`, with `B` and `D` in the same project, `C-x _ _ _`
+takes us to `D`, and burying `D`’s project takes us to `E`, the list
+becoming `E A C F … Z B D`: `B`, on the way to `D`, is buried along.
+Had no buffer outside the project followed `D` (e.g., `E … Z` in the
+project too), it would have taken us back to `A`, the first one.
+Repeated, it buries one project after another.  If every buffer
+belongs to the project, the order doesn’t change, and we stay on (or,
+in a sequence, go back to) the project’s most recent buffer.
+
+If the current buffer isn’t in a project, Emacs is older than 28, or
+the selected window is a minibuffer or a dedicated one, it does nothing
+but say why, e.g., `Smart Bury: 1/80 (not in a project)`, even with
+[messages](#messages) turned off.  Otherwise, it says how many buffers
+it buried, e.g., `Smart Bury: 3/80 (buried 5)`.
+
+No key is bound by default.  For instance, to bind it to `C-x p M--`,
+next to `project.el`’s own commands:
+
+```elisp
+(use-package smart-bury-project
+  :load-path "/path/to/smart-bury"
+  :commands smart-bury-project-bury-buffers
+  :init
+  (define-key project-prefix-map "M--" #'smart-bury-project-bury-buffers))
+```
+
+With the *repeat map*, `_`, `M-_`, and `M--` work right after it, as
+after any other *smart bury* function; a key of its own can be added
+to `smart-bury-repeat-map` too (see [Repeat map](#repeat-map)).
 
 ## Customization
 
@@ -352,6 +401,47 @@ these messages off:
 ```elisp
 (setopt smart-bury-messages nil)
 ```
+
+A function that can do nothing, such as
+`smart-bury-project-bury-buffers` outside a project, says why even with
+these messages turned off.
+
+## Improvements TODO
+
+### Integration with `previous-buffer` and friends
+
+*Smart Bury*’s switches leave buffers in the selected window’s own
+history (`window-prev-buffers`): those a sequence passes on the way,
+and those `smart-bury-project-bury-buffers` buries.  So
+`previous-buffer` (`C-x <left>`), or a fresh `quit-window`,
+`bury-buffer`, or `kill-buffer`, which pick a buffer from that history,
+may bring a buried buffer straight back.  Removing them from the
+history, as `bury-buffer` does for the buffer it buries
+(`unrecord-window-buffer`), would also forget where each of them was
+shown in that window (`switch-to-buffer-preserve-window-point`).  A
+direction to explore is what `switch-to-prev-buffer` does when its
+`bury-or-kill` argument is `append`: it moves the buffer’s entry to the
+end of the history, keeping the position while making the buffer the
+least likely one to come back.
+
+### Killing a project’s buffers
+
+`project-kill-buffers` (`C-x p k`) can be added to
+`smart-bury-wrapped-commands`, but in a sequence, the buffers it kills
+on the way are no longer there to count, so its wrapper lands too far.
+A `smart-bury-project-kill-buffers` built like
+`smart-bury-project-bury-buffers` would count them: killed buffers
+leave the list just as buried ones leave its top.
+
+### Dedicated and minibuffer windows
+
+Called from Lisp, as *Smart Bury* does, `switch-to-buffer` shows the
+buffer in another window when the selected one is strongly dedicated or
+a minibuffer window.  `smart-bury-project-bury-buffers` does nothing
+there, saying why; the other functions still switch, so a sequence may
+pop buffers into another window and go on there.  They could do
+nothing too, or, as `bury-buffer` does, delete a dedicated window, or
+follow `switch-to-buffer-in-dedicated-window`.
 
 ## Development
 

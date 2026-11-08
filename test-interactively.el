@@ -30,7 +30,15 @@
 ;; - adds a repeat-mode binding for `smart-bury-kill-current-buffer'
 ;;   (see the "Repeat map" section of README.md for why that one isn't
 ;;   included by default);
-;; - creates a few throwaway buffers to cycle/bury/kill through;
+;; - loads smart-bury-project.el and binds
+;;   `smart-bury-project-bury-buffers' to `C-x p _';
+;; - creates throwaway buffers `A' to `E' to cycle/bury/kill through,
+;;   as in README.md's cases, then opens smart-bury.el and
+;;   smart-bury-project.el, the buffers of a project: Emacs starts in
+;;   $HOME (see Makefile), so the throwaway buffers, `*scratch*', and
+;;   `*Messages*' inherit it as their `default-directory', outside
+;;   this repository, so that only the two files belong to its
+;;   project;
 ;; - when `smart-bury-test-demo-stale-entry' is non-nil (the default),
 ;;   customizes Smart Bury's options as a saved custom-file would,
 ;;   including a stale/undefined entry in both
@@ -55,8 +63,15 @@ below).")
 
 (define-key smart-bury-repeat-map (kbd "M-Q") #'smart-bury-kill-current-buffer)
 
-(dotimes (i 5)
-  (generate-new-buffer (format "test-buffer-%d" (1+ i))))
+(require 'smart-bury-project)
+(define-key project-prefix-map "_" #'smart-bury-project-bury-buffers)
+
+(dolist (name '("A" "B" "C" "D" "E"))
+  (generate-new-buffer name))
+
+(let ((directory (file-name-directory load-file-name)))
+  (find-file-noselect (expand-file-name "smart-bury.el" directory))
+  (find-file-noselect (expand-file-name "smart-bury-project.el" directory)))
 
 (when smart-bury-test-demo-stale-entry
   ;; Both command lists name `a-command-that-does-not-exist',
