@@ -31,7 +31,9 @@
 ;;   (see the "Repeat map" section of README.md for why that one isn't
 ;;   included by default);
 ;; - loads smart-bury-project.el and binds
-;;   `smart-bury-project-bury-buffers' to `C-x p _';
+;;   `smart-bury-project-bury-buffers' and
+;;   `smart-bury-project-raise-buffers' to `C-x p M--' and `C-x p -',
+;;   as in README.md;
 ;; - creates throwaway buffers `A' to `E' to cycle/bury/kill through,
 ;;   as in README.md's cases, then opens smart-bury.el and
 ;;   smart-bury-project.el, the buffers of a project: Emacs starts in
@@ -64,7 +66,8 @@ below).")
 (define-key smart-bury-repeat-map (kbd "M-Q") #'smart-bury-kill-current-buffer)
 
 (require 'smart-bury-project)
-(define-key project-prefix-map "_" #'smart-bury-project-bury-buffers)
+(define-key project-prefix-map (kbd "M--") #'smart-bury-project-bury-buffers)
+(define-key project-prefix-map "-" #'smart-bury-project-raise-buffers)
 
 (dolist (name '("A" "B" "C" "D" "E"))
   (generate-new-buffer name))

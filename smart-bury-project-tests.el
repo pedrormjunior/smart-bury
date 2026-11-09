@@ -166,17 +166,78 @@ the project up."
                          '("A" "B" "C" "D" "E"))))
       (set-window-dedicated-p nil nil))))
 
+;;; Raising
+
+(defun smart-bury-project-test--raise ()
+  "Run `smart-bury-project-raise-buffers' as `smart-bury-test--run' does.
+Return the messages it showed, as if called interactively."
+  (smart-bury-test-capturing-messages
+    (smart-bury-test--run #'smart-bury-project-raise-buffers)))
+
+(ert-deftest smart-bury-project-test-raises-project ()
+  "A fresh call raises the project's buffers to the top of the list, in
+their order, stays on the current buffer, and reports how many buffers
+it raised."
+  (smart-bury-project-test-with-case (list a c e)
+    (should (equal (smart-bury-project-test--raise)
+                   '("Smart Bury: 1/5 (raised 3)")))
+    (should (eq (current-buffer) a))
+    (should (equal (smart-bury-test--names bufs) '("A" "C" "E" "B" "D")))))
+
+(ert-deftest smart-bury-project-test-raise-mid-sequence ()
+  "Mid-sequence, the project's buffers passed on the way come before the
+current one, and the sequence goes on from there."
+  (smart-bury-project-test-with-case (list a c e)
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers)
+    (should (equal (smart-bury-project-test--raise)
+                   '("Smart Bury: 2/5 (raised 3)")))
+    (should (eq (current-buffer) c))
+    (should (equal (smart-bury-test--names bufs) '("C" "A" "E" "B" "D")))
+    (smart-bury-test--run #'smart-bury-switch-to-other-buffer)
+    (should (eq (current-buffer) a))))
+
+(ert-deftest smart-bury-project-test-raise-not-in-project ()
+  "Outside a project, raising does nothing but say why."
+  (smart-bury-project-test-with-case "not in a project"
+    (should (equal (smart-bury-project-test--raise)
+                   '("Smart Bury: 1/5 (not in a project)")))
+    (should (equal (smart-bury-test--names bufs) '("A" "B" "C" "D" "E")))))
+
+(ert-deftest smart-bury-project-test-raise-dedicated-window ()
+  "Raising switches no buffer, so it works in a strongly dedicated
+window."
+  (smart-bury-project-test-with-case (list a c e)
+    (unwind-protect
+        (progn
+          (set-window-dedicated-p nil t)
+          (should (equal (smart-bury-project-test--raise)
+                         '("Smart Bury: 1/5 (raised 3)")))
+          (should (equal (smart-bury-test--names bufs)
+                         '("A" "C" "E" "B" "D"))))
+      (set-window-dedicated-p nil nil))))
+
+(ert-deftest smart-bury-project-test-raise-minibuffer-window ()
+  "In a minibuffer window, raising does nothing, without even looking
+the project up."
+  (smart-bury-project-test-with-case (error "Looked the project up")
+    (cl-letf (((symbol-function 'window-minibuffer-p) (lambda (&rest _) t)))
+      (should (equal (smart-bury-project-test--raise)
+                     '("Smart Bury: 1/5 (minibuffer window)"))))
+    (should (equal (smart-bury-test--names bufs) '("A" "B" "C" "D" "E")))))
+
 ;;; Registration
 
 (ert-deftest smart-bury-project-test-registered ()
-  "The command continues a sequence and arms the repeat map, even after
+  "The commands continue a sequence and arm the repeat map, even after
 `smart-bury-wrapped-commands' changes."
-  (smart-bury-test-with-wrapped-commands '(quit-window)
-    (should (memq 'smart-bury-project-bury-buffers smart-bury--commands)))
-  (should (memq 'smart-bury-project-bury-buffers smart-bury--commands))
-  (should (eq (get 'smart-bury-project-bury-buffers 'repeat-map)
-              'smart-bury-repeat-map))
-  (should (eq (get 'smart-bury-project-bury-buffers 'repeat-check-key) 'no)))
+  (dolist (command '(smart-bury-project-bury-buffers
+                     smart-bury-project-raise-buffers))
+    (smart-bury-test-with-wrapped-commands '(quit-window)
+      (should (memq command smart-bury--commands)))
+    (should (memq command smart-bury--commands))
+    (should (eq (get command 'repeat-map) 'smart-bury-repeat-map))
+    (should (eq (get command 'repeat-check-key) 'no))))
 
 ;;; `smart-bury-project--buffers'
 

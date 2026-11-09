@@ -70,8 +70,10 @@ The two other functions, handled by default, are `quit-window` and
 take part in the same “smart” sequences.
 
 Besides, `smart-bury-project.el` provides
-`smart-bury-project-bury-buffers`, which buries all the buffers of a
-project at once (see [Burying a project](#burying-a-project)).
+`smart-bury-project-bury-buffers` and
+`smart-bury-project-raise-buffers`, which bury or raise all the buffers
+of a project at once (see [Burying and raising a
+project](#burying-and-raising-a-project)).
 
 ## Setup
 
@@ -165,11 +167,13 @@ buffer.  But if we stop and work on `B` and later bury it, then we go
 back to `A` as normal; and if `C` is intended instead, one extra `_`
 suffices to get us there.
 
-## Burying a project
+## Burying and raising a project
 
-`smart-bury-project.el` provides `smart-bury-project-bury-buffers`,
-which buries all the buffers of the current buffer’s project at once
-and switches to the next buffer outside the project.  The project’s
+`smart-bury-project.el` provides two functions for all the buffers of
+the current buffer’s project at once: `smart-bury-project-bury-buffers`
+buries them and switches to the next buffer outside the project;
+`smart-bury-project-raise-buffers` raises them to the top of the “list
+of all buffers” and stays on the current buffer.  The project’s
 buffers are those `project.el` reports (`project-buffers`, Emacs 28 or
 later), i.e., the buffers whose `default-directory` is in the project:
 not only those visiting its files, but also, e.g., its *Dired*,
@@ -189,26 +193,40 @@ Repeated, it buries one project after another.  If every buffer
 belongs to the project, the order doesn’t change, and we stay on (or,
 in a sequence, go back to) the project’s most recent buffer.
 
-If the current buffer isn’t in a project, Emacs is older than 28, or
-the selected window is a minibuffer or a dedicated one, it does nothing
-but say why, e.g., `Smart Bury: 1/80 (not in a project)`, even with
-[messages](#messages) turned off.  Otherwise, it says how many buffers
-it buried, e.g., `Smart Bury: 3/80 (buried 5)`.
+Raising buries every buffer outside the project instead, so the
+project’s buffers come first, in their order, and `_` then goes
+through them.  In a sequence, their order is the sequence’s too: e.g.,
+if the list is `A B C D E … Z`, with `A`, `C`, and `E` in the same
+project, `C-x _ _` takes us to `C`, and raising its project leaves the
+list as `C A E B D F … Z`: as if we had never left `A`, `C` comes
+after it, so `M-_` takes us back to `A`, and `_` on to `E`.  To raise a
+project we buried, we first go to one of its buffers, e.g., with `C-x
+p b` (`project-switch-to-buffer`).
 
-No key is bound by default.  For instance, to bind it to `C-x p M--`,
-next to `project.el`’s own commands:
+If the current buffer isn’t in a project, or Emacs is older than 28,
+they do nothing but say why, e.g., `Smart Bury: 1/80 (not in a
+project)`, even with [messages](#messages) turned off; so does burying
+in a minibuffer or dedicated window, and raising in a minibuffer
+window.  Otherwise, they say how many buffers they buried or raised,
+e.g., `Smart Bury: 3/80 (buried 5)`.
+
+No key is bound by default.  For instance, to bind them to `C-x p M--`
+and `C-x p -`, next to `project.el`’s own commands:
 
 ```elisp
 (use-package smart-bury-project
   :load-path "/path/to/smart-bury"
-  :commands smart-bury-project-bury-buffers
+  :commands (smart-bury-project-bury-buffers
+             smart-bury-project-raise-buffers)
   :init
-  (define-key project-prefix-map "M--" #'smart-bury-project-bury-buffers))
+  (define-key project-prefix-map (kbd "M--")
+    #'smart-bury-project-bury-buffers)
+  (define-key project-prefix-map "-" #'smart-bury-project-raise-buffers))
 ```
 
-With the *repeat map*, `_`, `M-_`, and `M--` work right after it, as
-after any other *smart bury* function; a key of its own can be added
-to `smart-bury-repeat-map` too (see [Repeat map](#repeat-map)).
+With the *repeat map*, `_`, `M-_`, and `M--` work right after either,
+as after any other *smart bury* function; a key of their own can be
+added to `smart-bury-repeat-map` too (see [Repeat map](#repeat-map)).
 
 ## Customization
 
@@ -442,6 +460,15 @@ there, saying why; the other functions still switch, so a sequence may
 pop buffers into another window and go on there.  They could do
 nothing too, or, as `bury-buffer` does, delete a dedicated window, or
 follow `switch-to-buffer-in-dedicated-window`.
+
+### Selecting a project to raise
+
+`smart-bury-project-raise-buffers` raises the current buffer’s
+project, so raising a project we buried takes going to one of its
+buffers first.  With a prefix argument, it could ask for a project
+instead, as `C-x p p` does (`project-prompt-project-dir`), and switch
+to the project’s most recent buffer, a switch the sequence would then
+have to count.
 
 ## Development
 

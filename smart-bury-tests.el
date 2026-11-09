@@ -950,6 +950,94 @@ the sequence goes back to the first of them."
     (should (eq smart-bury--initial-buffer b))
     (should (= smart-bury--counter 1))))
 
+;;; `smart-bury--raise-buffers'
+
+(defun smart-bury-test--raise (&rest buffers)
+  "Call `smart-bury--raise-buffers' on BUFFERS as a command would.
+See `smart-bury-test--bury'."
+  (prog1 (let ((last-command smart-bury-test--previous))
+           (smart-bury--raise-buffers buffers))
+    (setq smart-bury-test--previous 'smart-bury-bury-buffer)))
+
+(ert-deftest smart-bury-test-raise-buffers-fresh ()
+  "A fresh call raises the buffers, the current one included, to the top
+of the list, in their order, and stays on the current buffer."
+  (smart-bury-test-with-case-only
+    (should (equal (smart-bury-test--raise c e) (list a c e)))
+    (should (eq (current-buffer) a))
+    (should (equal (smart-bury-test--names bufs) '("A" "C" "E" "B" "D")))
+    (should (eq smart-bury--initial-buffer a))
+    (should (= smart-bury--counter 1))))
+
+(ert-deftest smart-bury-test-raise-buffers-mid-sequence ()
+  "Mid-sequence, the buffers are raised in the sequence's order, the
+current one after those passed on the way, and the sequence goes on from
+its new depth."
+  (smart-bury-test-with-case-only
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers)
+    (should (eq (current-buffer) c))
+    (smart-bury-test--raise a e)
+    (should (eq (current-buffer) c))
+    (should (equal (smart-bury-test--names bufs) '("C" "A" "E" "B" "D")))
+    (should (eq smart-bury--initial-buffer a))
+    (should (= smart-bury--counter 2))
+    (smart-bury-test--run #'smart-bury-switch-through-buffers)
+    (should (eq (current-buffer) e))))
+
+(ert-deftest smart-bury-test-raise-buffers-initial-buffer-left ()
+  "Mid-sequence, when no buffer raised was passed on the way, the current
+buffer becomes the initial one."
+  (smart-bury-test-with-case-only
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers)
+    (smart-bury-test--raise e)
+    (should (eq (current-buffer) c))
+    (should (equal (smart-bury-test--names bufs) '("C" "E" "A" "B" "D")))
+    (should (eq smart-bury--initial-buffer c))
+    (should (= smart-bury--counter 1))
+    (smart-bury-test--run #'smart-bury-switch-to-other-buffer)
+    (should (eq (current-buffer) e))))
+
+(ert-deftest smart-bury-test-raise-buffers-every-buffer-mid-sequence ()
+  "Mid-sequence, raising every buffer changes neither the order nor the
+sequence."
+  (smart-bury-test-with-case-only
+    (smart-bury-test--run #'smart-bury-switch-through-buffers
+                          #'smart-bury-switch-through-buffers)
+    (apply #'smart-bury-test--raise bufs)
+    (should (eq (current-buffer) c))
+    (should (equal (smart-bury-test--names bufs) '("C" "A" "B" "D" "E")))
+    (should (eq smart-bury--initial-buffer a))
+    (should (= smart-bury--counter 3))))
+
+(ert-deftest smart-bury-test-raise-buffers-internal-buffers-stay ()
+  "Internal buffers, whose names start with a space, are not buried."
+  (let ((internal (generate-new-buffer " sb-internal")))
+    (unwind-protect
+        (smart-bury-test-with-case-only
+          (setq bufs (append bufs (list internal)))
+          (smart-bury-test--order (list a internal b c d e))
+          (smart-bury-test--raise c)
+          (should (equal (smart-bury-test--names bufs)
+                         '("A" " sb-internal" "C" "B" "D" "E"))))
+      (kill-buffer internal))))
+
+(ert-deftest smart-bury-test-raise-buffers-counter-past-buffers ()
+  "With the counter past the eligible buffers (e.g. after killing a base
+buffer also killed its indirect ones), each buffer raised passed on the
+way is counted once, although the selection wraps around and repeats
+them."
+  (smart-bury-test-with-case-only
+    (smart-bury-test--order (list c a b d e))
+    (setq smart-bury--initial-buffer a
+          smart-bury--counter 7
+          smart-bury-test--previous 'smart-bury-switch-through-buffers)
+    (smart-bury-test--raise a)
+    (should (equal (smart-bury-test--names bufs) '("C" "A" "B" "D" "E")))
+    (should (eq smart-bury--initial-buffer a))
+    (should (= smart-bury--counter 2))))
+
 (ert-deftest smart-bury-test-switch-blocked-reason ()
   "Smart Bury cannot switch buffers in a strongly dedicated window, where
 `switch-to-buffer' would show them in another window instead; a weakly

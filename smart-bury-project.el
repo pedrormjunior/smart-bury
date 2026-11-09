@@ -30,11 +30,18 @@
 ;;
 ;; - `smart-bury-project-bury-buffers': bury all the buffers of the
 ;;   current project, keeping their order, and switch to the next
-;;   buffer outside it, taking part in Smart Bury's sequences.
+;;   buffer outside it, taking part in Smart Bury's sequences;
 ;;
-;; No key is bound by default.  For instance, to bind it to `C-x p M--':
+;; - `smart-bury-project-raise-buffers': raise them all to the top of
+;;   the list of all buffers, keeping their order, and stay on the
+;;   current buffer, taking part in the sequences too.
 ;;
-;;   (define-key project-prefix-map "M--" #'smart-bury-project-bury-buffers)
+;; No key is bound by default.  For instance, to bind them to
+;; `C-x p M--' and `C-x p -':
+;;
+;;   (define-key project-prefix-map (kbd "M--")
+;;     #'smart-bury-project-bury-buffers)
+;;   (define-key project-prefix-map "-" #'smart-bury-project-raise-buffers)
 
 ;;; Code:
 
@@ -51,6 +58,13 @@ needs."
     (let ((project (project-current)))
       (or (and project (project-buffers project))
           "not in a project"))))
+
+(defun smart-bury-project--count (buffers)
+  "Return how many of BUFFERS a report counts.
+Internal buffers, whose names start with a space, are not counted."
+  (seq-count (lambda (buffer)
+               (not (string-prefix-p " " (buffer-name buffer))))
+             buffers))
 
 ;;;###autoload
 (defun smart-bury-project-bury-buffers ()
@@ -81,11 +95,37 @@ when the current buffer is not in a project, when Emacs is older than
         (smart-bury--report
          "%s (buried %d)"
          (smart-bury--position smart-bury--counter)
-         (seq-count (lambda (buffer)
-                      (not (string-prefix-p " " (buffer-name buffer))))
-                    buried))))))
+         (smart-bury-project--count buried))))))
+
+;;;###autoload
+(defun smart-bury-project-raise-buffers ()
+  "Smartly raise all the buffers of the current buffer's project.
+Put them at the top of the list of all buffers, keeping their order, by
+burying every other buffer, most recent first, and stay on the current
+buffer, so that the next buffer is the project's next one.  In a
+sequence, their order is the sequence's: the project's buffers passed
+on the way come before the current one, which goes on one buffer deeper
+than them.  Report how many buffers were raised, e.g. \"Smart Bury:
+2/80 (raised 5)\".
+
+The project's buffers are those `project-buffers' returns, as for
+`smart-bury-project-bury-buffers'.  Do nothing but report why when the
+current buffer is not in a project, when Emacs is older than 28, or in
+a minibuffer window (see `smart-bury--do-nothing')."
+  (interactive)
+  (let ((buffers (if (window-minibuffer-p)
+                     "minibuffer window"
+                   (smart-bury-project--buffers))))
+    (if (stringp buffers)
+        (smart-bury--do-nothing buffers)
+      (let ((raised (smart-bury--raise-buffers buffers)))
+        (smart-bury--report
+         "%s (raised %d)"
+         (smart-bury--position smart-bury--counter)
+         (smart-bury-project--count raised))))))
 
 (smart-bury--register-command 'smart-bury-project-bury-buffers)
+(smart-bury--register-command 'smart-bury-project-raise-buffers)
 
 (provide 'smart-bury-project)
 

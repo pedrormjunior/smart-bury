@@ -51,9 +51,10 @@
 ;; `smart-bury-wrapped-commands' (by default `quit-window' and
 ;; `kill-current-buffer'), which takes part in the same sequences.
 ;;
-;; `smart-bury-project.el' adds `smart-bury-project-bury-buffers', which
-;; buries all the buffers of the current buffer's project at once
-;; (Emacs 28 or later), taking part in the same sequences too.
+;; `smart-bury-project.el' adds `smart-bury-project-bury-buffers' and
+;; `smart-bury-project-raise-buffers', which bury or raise all the
+;; buffers of the current buffer's project at once (Emacs 28 or later),
+;; taking part in the same sequences too.
 ;;
 ;; To use it, enable `smart-bury-mode', and preferably `repeat-mode':
 ;;
@@ -355,6 +356,43 @@ the most recent one."
       (smart-bury--switch-to-buffer (car (last selection)))
       (setq smart-bury--initial-buffer (car selection)))
     (nreverse buried)))
+
+(defun smart-bury--raise-buffers (buffers)
+  "Smartly raise BUFFERS and the current buffer, keeping their order.
+Bury every other buffer instead, most recent first, so that BUFFERS come
+first in the list of all buffers, in their order, and stay on the
+current buffer.  Return the buffers raised, most recent first.
+
+Their order is the sequence's, as for `smart-bury--bury-buffers': those
+of BUFFERS passed on the way come before the current one, which goes on
+one buffer deeper than them, and the first of them becomes the initial
+one.  Internal buffers, whose names start with a space, are not buried:
+Smart Bury never switches to them."
+  (smart-bury--maybe-start-sequence)
+  (let* ((buffers (cons (current-buffer) buffers))
+         (depth (smart-bury--depth))
+         ;; Also records the current buffer, which may not be first
+         ;; (see `smart-bury--other-buffers'): it is the most recent.
+         (others (smart-bury--other-buffers))
+         ;; `seq-uniq': with fewer eligible buffers than the counter
+         ;; expects, e.g. after killing a base buffer also killed its
+         ;; indirect ones, the selection wraps around, and a buffer
+         ;; repeated in it would be counted twice below.
+         (passed (and (> depth 1)
+                      (seq-filter (lambda (buffer) (memq buffer buffers))
+                                  (seq-uniq (smart-bury--select-buffers
+                                             others (1- depth)))))))
+    ;; No walk-back, unlike `smart-bury--bury-buffers': the list is
+    ;; already in the sequence's order, but for the current buffer,
+    ;; first, which stays there.
+    (dolist (buffer others)
+      (unless (or (memq buffer buffers)
+                  (string-prefix-p " " (buffer-name buffer)))
+        (bury-buffer-internal buffer)))
+    (setq smart-bury--counter (1+ (length passed))
+          smart-bury--initial-buffer (or (car passed) (current-buffer)))
+    (seq-filter (lambda (buffer) (memq buffer buffers))
+                (smart-bury--buffer-list))))
 
 (defun smart-bury--switch-blocked-reason nil
   "Return why Smart Bury cannot switch buffers in the selected window.
